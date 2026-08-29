@@ -1,0 +1,12 @@
+{
+  "name": "surveillancemoteur-api",
+  "version": "1.0.0",
+  "description": "Serveur HTTP pour la surveillance IoT d'un moteur avec ESP32, Arduino UNO et Telegram",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
