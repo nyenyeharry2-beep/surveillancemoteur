@@ -1,3 +1,4 @@
+
 const express = require("express");
 const { Pool } = require("pg");
 
@@ -5,36 +6,79 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 
-// =====================================================
+// ============================================================
 // MIDDLEWARE
-// =====================================================
+// ============================================================
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Tableau de bord situé dans /public
 app.use(express.static("public"));
 
-// =====================================================
+// ============================================================
 // POSTGRESQL
-// =====================================================
+// ============================================================
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+
   ssl: {
     rejectUnauthorized: false
   }
 });
 
-// =====================================================
-// CREATION TABLE
-// =====================================================
+// ============================================================
+// DERNIERE DONNEE RECUE
+// ============================================================
+
+let derniereDonnee = {
+  rpm: 0,
+
+  ax: 0,
+  ay: 0,
+  az: 0,
+
+  accelerationRMS: 0,
+  vibration: 0,
+
+  impulsions: 0,
+  impulsionsTotal: 0,
+
+  ecart: 0,
+
+  heure: "00:00:00",
+
+  etat: "ARRET",
+  moteur: "OFF",
+
+  timestamp: new Date().toISOString()
+};
+
+// ============================================================
+// COMMANDE MOTEUR
+// ============================================================
+
+// STOP par sécurité au démarrage
+let commandeEnAttente = "STOP";
+
+let numeroCommande = 0;
+
+let derniereCommandeEnvoyee = "STOP";
+
+
+// ============================================================
+// INITIALISATION BASE DE DONNEES
+// ============================================================
 
 async function initialiserBase() {
 
   try {
 
     await pool.query(`
+
       CREATE TABLE IF NOT EXISTS historique_moteur (
+
         id SERIAL PRIMARY KEY,
 
         timestamp TIMESTAMPTZ DEFAULT NOW(),
@@ -46,9 +90,11 @@ async function initialiserBase() {
         az REAL DEFAULT 0,
 
         acceleration_rms REAL DEFAULT 0,
+
         vibration REAL DEFAULT 0,
 
         impulsions INTEGER DEFAULT 0,
+
         impulsions_total INTEGER DEFAULT 0,
 
         ecart REAL DEFAULT 0,
@@ -58,55 +104,29 @@ async function initialiserBase() {
         etat VARCHAR(30),
 
         moteur VARCHAR(10)
+
       )
+
     `);
 
-    console.log("Base PostgreSQL OK");
-    console.log("Table historique_moteur OK");
+    console.log(
+      "PostgreSQL : table historique_moteur OK"
+    );
 
   } catch (error) {
 
     console.error(
-      "Erreur PostgreSQL :",
+      "Erreur initialisation PostgreSQL :",
       error.message
     );
+
   }
 }
 
-// =====================================================
-// DERNIERE DONNEE
-// =====================================================
 
-let derniereDonnee = {
-
-  rpm: 0,
-
-  ax: 0,
-  ay: 0,
-  az: 0,
-
-  accelerationRMS: 0,
-
-  vibration: 0,
-
-  impulsions: 0,
-
-  impulsionsTotal: 0,
-
-  ecart: 0,
-
-  heure: "00:00:00",
-
-  etat: "ARRET",
-
-  moteur: "OFF",
-
-  timestamp: new Date().toISOString()
-};
-
-// =====================================================
+// ============================================================
 // TELEGRAM
-// =====================================================
+// ============================================================
 
 const TELEGRAM_BOT_TOKEN =
   process.env.TELEGRAM_BOT_TOKEN;
@@ -114,7 +134,7 @@ const TELEGRAM_BOT_TOKEN =
 const TELEGRAM_CHAT_ID =
   process.env.TELEGRAM_CHAT_ID;
 
-let derniereAlerte = "";
+let derniereAlerteTelegram = "";
 
 async function envoyerTelegram(message) {
 
@@ -128,6 +148,7 @@ async function envoyerTelegram(message) {
     );
 
     return;
+
   }
 
   try {
@@ -135,23 +156,29 @@ async function envoyerTelegram(message) {
     const url =
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-    await fetch(url, {
+    await fetch(
+      url,
+      {
 
-      method: "POST",
+        method: "POST",
 
-      headers: {
-        "Content-Type":
-          "application/json"
-      },
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
 
-      body: JSON.stringify({
+        body: JSON.stringify({
 
-        chat_id:
-          TELEGRAM_CHAT_ID,
+          chat_id:
+            TELEGRAM_CHAT_ID,
 
-        text: message
-      })
-    });
+          text:
+            message
+
+        })
+
+      }
+    );
 
   } catch (error) {
 
@@ -159,12 +186,82 @@ async function envoyerTelegram(message) {
       "Erreur Telegram :",
       error.message
     );
+
   }
+
 }
 
-// =====================================================
-// POST /api/data
-// =====================================================
+
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
+
+app.get(
+  "/",
+  (req, res) => {
+
+    res.sendFile(
+      __dirname +
+      "/public/index.html"
+    );
+
+  }
+);
+
+
+// ============================================================
+// TEST SERVEUR
+// ============================================================
+
+app.get(
+  "/api/test",
+  async (req, res) => {
+
+    let database = "ERREUR";
+
+    try {
+
+      await pool.query(
+        "SELECT NOW()"
+      );
+
+      database = "OK";
+
+    } catch (error) {
+
+      database = "ERREUR";
+
+    }
+
+    res.json({
+
+      success: true,
+
+      serveur:
+        "OK",
+
+      database:
+        database,
+
+      telegram:
+        TELEGRAM_BOT_TOKEN &&
+        TELEGRAM_CHAT_ID
+          ? "CONFIGURE"
+          : "NON CONFIGURE",
+
+      commande:
+        commandeEnAttente
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// ESP32 → RENDER
+// RECEPTION DES MESURES
+// ============================================================
 
 app.post(
   "/api/data",
@@ -172,26 +269,43 @@ app.post(
 
     try {
 
-      const d = req.body;
+      const d = req.body || {};
+
+
+      // ------------------------------------------------------
+      // CONVERSION DES DONNEES
+      // ------------------------------------------------------
 
       derniereDonnee = {
 
-        rpm: Number(d.rpm) || 0,
+        rpm:
+          Number(d.rpm) || 0,
 
-        ax: Number(d.ax) || 0,
-        ay: Number(d.ay) || 0,
-        az: Number(d.az) || 0,
+        ax:
+          Number(d.ax) || 0,
+
+        ay:
+          Number(d.ay) || 0,
+
+        az:
+          Number(d.az) || 0,
 
         accelerationRMS:
           Number(
-            d.accelerationRMS
+            d.accelerationRMS ??
+            d.arms
           ) || 0,
 
         vibration:
-          Number(d.vibration) || 0,
+          Number(
+            d.vibration ??
+            d.vrms
+          ) || 0,
 
         impulsions:
-          Number(d.impulsions) || 0,
+          Number(
+            d.impulsions
+          ) || 0,
 
         impulsionsTotal:
           Number(
@@ -199,52 +313,97 @@ app.post(
           ) || 0,
 
         ecart:
-          Number(d.ecart) || 0,
+          Number(
+            d.ecart
+          ) || 0,
 
         heure:
-          d.heure || "00:00:00",
+          d.heure ||
+          "00:00:00",
 
         etat:
-          d.etat || "ARRET",
+          String(
+            d.etat ||
+            "ARRET"
+          ).toUpperCase(),
 
         moteur:
-          d.moteur || "OFF",
+          String(
+            d.moteur ||
+            "OFF"
+          ).toUpperCase(),
 
         timestamp:
           d.timestamp ||
           new Date().toISOString()
+
       };
 
-      // =================================================
-      // ENREGISTREMENT POSTGRESQL
-      // =================================================
+
+      // ------------------------------------------------------
+      // ENREGISTREMENT HISTORIQUE
+      // ------------------------------------------------------
 
       await pool.query(
 
         `
-        INSERT INTO historique_moteur
-        (
+
+        INSERT INTO historique_moteur (
+
           timestamp,
+
           rpm,
+
           ax,
           ay,
           az,
+
           acceleration_rms,
+
           vibration,
+
           impulsions,
+
           impulsions_total,
+
           ecart,
+
           heure,
+
           etat,
+
           moteur
+
         )
 
-        VALUES
-        (
-          $1,$2,$3,$4,$5,
-          $6,$7,$8,$9,$10,
-          $11,$12,$13
+        VALUES (
+
+          $1,
+
+          $2,
+
+          $3,
+          $4,
+          $5,
+
+          $6,
+
+          $7,
+
+          $8,
+
+          $9,
+
+          $10,
+
+          $11,
+
+          $12,
+
+          $13
+
         )
+
         `,
 
         [
@@ -254,7 +413,9 @@ app.post(
           derniereDonnee.rpm,
 
           derniereDonnee.ax,
+
           derniereDonnee.ay,
+
           derniereDonnee.az,
 
           derniereDonnee.accelerationRMS,
@@ -272,61 +433,90 @@ app.post(
           derniereDonnee.etat,
 
           derniereDonnee.moteur
+
         ]
+
       );
 
-      // =================================================
-      // TELEGRAM
-      // =================================================
+
+      // ------------------------------------------------------
+      // ALERTE TELEGRAM
+      // ------------------------------------------------------
 
       if (
         derniereDonnee.etat ===
         "ANOMALIE"
       ) {
 
-        const alerte =
+        const message =
+
           `🚨 ALERTE MOTEUR
 
-RPM : ${derniereDonnee.rpm}
-Vibration : ${derniereDonnee.vibration} mm/s
-Écart RPM : ${derniereDonnee.ecart} %
+RPM : ${derniereDonnee.rpm.toFixed(2)}
+AX : ${derniereDonnee.ax.toFixed(2)}
+AY : ${derniereDonnee.ay.toFixed(2)}
+AZ : ${derniereDonnee.az.toFixed(2)}
+
+ARMS : ${derniereDonnee.accelerationRMS.toFixed(2)} m/s²
+VRMS : ${derniereDonnee.vibration.toFixed(2)} mm/s
+
+Impulsions : ${derniereDonnee.impulsions}
+Impulsions totales : ${derniereDonnee.impulsionsTotal}
+
+Ecart RPM : ${derniereDonnee.ecart.toFixed(2)} %
+
 Heure : ${derniereDonnee.heure}
-État : ANOMALIE
+
+Etat : ANOMALIE
 Moteur : ${derniereDonnee.moteur}`;
 
-        // éviter de spammer Telegram
+
         if (
-          alerte !== derniereAlerte
+          message !==
+          derniereAlerteTelegram
         ) {
 
           await envoyerTelegram(
-            alerte
+            message
           );
 
-          derniereAlerte =
-            alerte;
+          derniereAlerteTelegram =
+            message;
+
         }
 
       } else {
 
-        derniereAlerte = "";
+        derniereAlerteTelegram =
+          "";
+
       }
+
+
+      // ------------------------------------------------------
+      // REPONSE ESP32
+      // ------------------------------------------------------
 
       res.json({
 
         success: true,
 
         message:
-          "Données enregistrées",
+          "Donnee enregistree",
+
+        commande:
+          commandeEnAttente,
 
         data:
           derniereDonnee
+
       });
+
 
     } catch (error) {
 
       console.error(
-        "Erreur /api/data :",
+        "Erreur POST /api/data :",
         error
       );
 
@@ -336,14 +526,18 @@ Moteur : ${derniereDonnee.moteur}`;
 
         error:
           error.message
+
       });
+
     }
+
   }
 );
 
-// =====================================================
-// GET /api/latest
-// =====================================================
+
+// ============================================================
+// DERNIERE DONNEE
+// ============================================================
 
 app.get(
   "/api/latest",
@@ -352,12 +546,229 @@ app.get(
     res.json(
       derniereDonnee
     );
+
   }
 );
 
-// =====================================================
-// GET /api/history
-// =====================================================
+
+// ============================================================
+// WEB → RENDER
+// NOUVELLE COMMANDE START / STOP
+// ============================================================
+
+app.post(
+  "/api/command",
+  (req, res) => {
+
+    try {
+
+      const commande =
+        String(
+          req.body.commande ||
+          req.body.command ||
+          ""
+        ).toUpperCase();
+
+
+      if (
+        commande !== "START" &&
+        commande !== "STOP"
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "Commande invalide. Utiliser START ou STOP."
+
+        });
+
+      }
+
+
+      // ------------------------------------------------------
+      // ENREGISTRER LA COMMANDE
+      // ------------------------------------------------------
+
+      commandeEnAttente =
+        commande;
+
+      numeroCommande++;
+
+
+      console.log(
+        "================================"
+      );
+
+      console.log(
+        "NOUVELLE COMMANDE :",
+        commande
+      );
+
+      console.log(
+        "NUMERO :",
+        numeroCommande
+      );
+
+      console.log(
+        "================================"
+      );
+
+
+      res.json({
+
+        success: true,
+
+        commande:
+          commande,
+
+        numeroCommande:
+          numeroCommande,
+
+        message:
+          `Commande ${commande} en attente pour l'ESP32`
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+      res.status(500).json({
+
+        success: false,
+
+        error:
+          error.message
+
+      });
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// ESP32 → RENDER
+// RECUPERER LA COMMANDE
+// ============================================================
+//
+// L'ESP32 doit appeler cette URL régulièrement.
+//
+// Exemple :
+// GET /api/command
+//
+// ============================================================
+
+app.get(
+  "/api/command",
+  (req, res) => {
+
+    res.json({
+
+      success: true,
+
+      commande:
+        commandeEnAttente,
+
+      numeroCommande:
+        numeroCommande
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// CONFIRMATION DE COMMANDE PAR ESP32
+// ============================================================
+//
+// Après avoir reçu et exécuté START/STOP,
+// l'ESP32 peut appeler :
+//
+// POST /api/command/ack
+//
+// Body :
+// {
+//   "commande": "START",
+//   "numeroCommande": 5
+// }
+//
+// ============================================================
+
+app.post(
+  "/api/command/ack",
+  (req, res) => {
+
+    const commande =
+      String(
+        req.body.commande ||
+        ""
+      ).toUpperCase();
+
+    const numero =
+      Number(
+        req.body.numeroCommande
+      );
+
+
+    if (
+      commande !== "START" &&
+      commande !== "STOP"
+    ) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        error:
+          "Commande invalide"
+
+      });
+
+    }
+
+
+    derniereCommandeEnvoyee =
+      commande;
+
+
+    console.log(
+      "ESP32 CONFIRME :",
+      commande,
+      "numero :",
+      numero
+    );
+
+
+    res.json({
+
+      success: true,
+
+      message:
+        "Commande confirmee",
+
+      commande:
+        commande,
+
+      numeroCommande:
+        numero
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// HISTORIQUE
+// ============================================================
 
 app.get(
   "/api/history",
@@ -365,16 +776,37 @@ app.get(
 
     try {
 
-      const limit =
-        Math.min(
-          Number(req.query.limit) || 100,
-          1000
-        );
+      let limit =
+        Number(
+          req.query.limit
+        ) || 100;
+
+
+      // Sécurité
+
+      if (
+        limit < 1
+      ) {
+
+        limit = 100;
+
+      }
+
+
+      if (
+        limit > 1000
+      ) {
+
+        limit = 1000;
+
+      }
+
 
       const result =
         await pool.query(
 
           `
+
           SELECT
 
             id,
@@ -410,10 +842,13 @@ app.get(
           ORDER BY timestamp DESC
 
           LIMIT $1
+
           `,
 
           [limit]
+
         );
+
 
       res.json({
 
@@ -424,11 +859,14 @@ app.get(
 
         data:
           result.rows
+
       });
+
 
     } catch (error) {
 
       console.error(
+        "Erreur historique :",
         error
       );
 
@@ -438,14 +876,18 @@ app.get(
 
         error:
           error.message
+
       });
+
     }
+
   }
 );
 
-// =====================================================
-// GET /api/history/date
-// =====================================================
+
+// ============================================================
+// HISTORIQUE PAR DATE
+// ============================================================
 
 app.get(
   "/api/history/date",
@@ -459,6 +901,7 @@ app.get(
       const fin =
         req.query.fin;
 
+
       if (
         !debut ||
         !fin
@@ -469,17 +912,22 @@ app.get(
           success: false,
 
           error:
-            "debut et fin sont obligatoires"
+            "Utiliser ?debut=DATE&fin=DATE"
+
         });
+
       }
+
 
       const result =
         await pool.query(
 
           `
+
           SELECT
 
             id,
+
             timestamp,
 
             rpm,
@@ -512,13 +960,16 @@ app.get(
           BETWEEN $1 AND $2
 
           ORDER BY timestamp ASC
+
           `,
 
           [
             debut,
             fin
           ]
+
         );
+
 
       res.json({
 
@@ -529,9 +980,15 @@ app.get(
 
         data:
           result.rows
+
       });
 
+
     } catch (error) {
+
+      console.error(
+        error
+      );
 
       res.status(500).json({
 
@@ -539,14 +996,18 @@ app.get(
 
         error:
           error.message
+
       });
+
     }
+
   }
 );
 
-// =====================================================
-// GET /api/alerts
-// =====================================================
+
+// ============================================================
+// HISTORIQUE DES ANOMALIES
+// ============================================================
 
 app.get(
   "/api/alerts",
@@ -557,7 +1018,23 @@ app.get(
       const result =
         await pool.query(`
 
-          SELECT *
+          SELECT
+
+            id,
+
+            timestamp,
+
+            rpm,
+
+            vibration,
+
+            ecart,
+
+            heure,
+
+            etat,
+
+            moteur
 
           FROM historique_moteur
 
@@ -569,13 +1046,19 @@ app.get(
 
         `);
 
+
       res.json({
 
         success: true,
 
+        count:
+          result.rows.length,
+
         data:
           result.rows
+
       });
+
 
     } catch (error) {
 
@@ -585,115 +1068,136 @@ app.get(
 
         error:
           error.message
+
       });
+
     }
+
   }
 );
 
-// =====================================================
-// COMMANDES
-// =====================================================
 
-let commandeMoteur =
-  "STOP";
+// ============================================================
+// STATISTIQUES
+// ============================================================
 
-app.post(
-  "/api/command",
+app.get(
+  "/api/stats",
   async (req, res) => {
 
-    const commande =
-      String(
-        req.body.commande || ""
-      ).toUpperCase();
+    try {
 
-    if (
-      commande !== "START" &&
-      commande !== "STOP"
-    ) {
+      const result =
+        await pool.query(`
 
-      return res.status(400).json({
+          SELECT
+
+            COUNT(*) AS total_mesures,
+
+            COALESCE(
+              AVG(rpm),
+              0
+            ) AS rpm_moyen,
+
+            COALESCE(
+              AVG(vibration),
+              0
+            ) AS vibration_moyenne,
+
+            COALESCE(
+              MAX(vibration),
+              0
+            ) AS vibration_max,
+
+            COUNT(
+              CASE
+                WHEN etat = 'ANOMALIE'
+                THEN 1
+              END
+            ) AS nombre_anomalies
+
+          FROM historique_moteur
+
+        `);
+
+
+      res.json({
+
+        success: true,
+
+        data:
+          result.rows[0]
+
+      });
+
+
+    } catch (error) {
+
+      res.status(500).json({
 
         success: false,
 
         error:
-          "Commande invalide"
+          error.message
+
       });
+
     }
 
-    commandeMoteur =
-      commande;
-
-    console.log(
-      "Commande moteur :",
-      commande
-    );
-
-    res.json({
-
-      success: true,
-
-      commande:
-        commandeMoteur
-    });
   }
 );
 
-// =====================================================
-// GET COMMAND
-// =====================================================
 
-app.get(
-  "/api/command",
+// ============================================================
+// 404
+// ============================================================
+
+app.use(
   (req, res) => {
 
-    res.json({
+    res.status(404).json({
 
-      success: true,
+      success: false,
 
-      commande:
-        commandeMoteur
+      error:
+        "Route introuvable",
+
+      route:
+        req.originalUrl
+
     });
+
   }
 );
 
-// =====================================================
-// TEST
-// =====================================================
 
-app.get(
-  "/api/test",
-  (req, res) => {
-
-    res.json({
-
-      success: true,
-
-      message:
-        "Serveur surveillance moteur OK",
-
-      database:
-        "PostgreSQL",
-
-      telegram:
-        TELEGRAM_BOT_TOKEN
-          ? "CONFIGURE"
-          : "NON CONFIGURE"
-    });
-  }
-);
-
-// =====================================================
+// ============================================================
 // DEMARRAGE
-// =====================================================
+// ============================================================
 
 app.listen(
   PORT,
   async () => {
 
     console.log(
-      `Serveur lancé sur le port ${PORT}`
+      "========================================"
     );
 
+    console.log(
+      "SERVEUR SURVEILLANCE MOTEUR"
+    );
+
+    console.log(
+      "Port :",
+      PORT
+    );
+
+    console.log(
+      "========================================"
+    );
+
+
     await initialiserBase();
+
   }
 );
