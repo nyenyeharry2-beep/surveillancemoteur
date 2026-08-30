@@ -1,71 +1,81 @@
 
+// ============================================================
+// SERVEUR IoT - SURVEILLANCE MOTEUR
+// Render + PostgreSQL + ESP32 + Interface Web + Telegram
+// ============================================================
+
 const express = require("express");
+const path = require("path");
 const { Pool } = require("pg");
 
 const app = express();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // ============================================================
-// MIDDLEWARE
+// CONFIGURATION
 // ============================================================
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Tableau de bord situé dans /public
-app.use(express.static("public"));
+// Fichiers du tableau de bord
+app.use(express.static(path.join(__dirname)));
 
 // ============================================================
 // POSTGRESQL
 // ============================================================
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+let pool = null;
 
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
+if (process.env.DATABASE_URL) {
+
+    pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    });
+
+    console.log("DATABASE_URL détectée.");
+
+} else {
+
+    console.log(
+        "ATTENTION : DATABASE_URL n'est pas configurée."
+    );
+}
 
 // ============================================================
-// DERNIERE DONNEE RECUE
+// VARIABLES DE SECOURS
 // ============================================================
+
+// Si PostgreSQL n'est pas disponible,
+// les dernières données restent quand même accessibles.
 
 let derniereDonnee = {
-  rpm: 0,
 
-  ax: 0,
-  ay: 0,
-  az: 0,
+    rpm: 0,
+    ax: 0,
+    ay: 0,
+    az: 0,
+    arms: 0,
+    vrms: 0,
+    impulsions: 0,
+    ecart: 0,
+    heure: "00:00:00",
+    etat: "ARRET",
+    moteur: "OFF",
+    alarme: "OFF",
+    probleme: "AUCUN"
 
-  accelerationRMS: 0,
-  vibration: 0,
-
-  impulsions: 0,
-  impulsionsTotal: 0,
-
-  ecart: 0,
-
-  heure: "00:00:00",
-
-  etat: "ARRET",
-  moteur: "OFF",
-
-  timestamp: new Date().toISOString()
 };
 
-// ============================================================
-// COMMANDE MOTEUR
-// ============================================================
+// Dernière commande envoyée par le tableau de bord
 
-// STOP par sécurité au démarrage
-let commandeEnAttente = "STOP";
+let derniereCommande = "STOP";
 
 let numeroCommande = 0;
-
-let derniereCommandeEnvoyee = "STOP";
-
 
 // ============================================================
 // INITIALISATION BASE DE DONNEES
@@ -73,122 +83,136 @@ let derniereCommandeEnvoyee = "STOP";
 
 async function initialiserBase() {
 
-  try {
+    if (!pool) {
+        return;
+    }
 
-    await pool.query(`
+    try {
 
-      CREATE TABLE IF NOT EXISTS historique_moteur (
+        await pool.query(`
 
-        id SERIAL PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS mesures (
+                id SERIAL PRIMARY KEY,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
 
-        timestamp TIMESTAMPTZ DEFAULT NOW(),
+                rpm DOUBLE PRECISION DEFAULT 0,
+                ax DOUBLE PRECISION DEFAULT 0,
+                ay DOUBLE PRECISION DEFAULT 0,
+                az DOUBLE PRECISION DEFAULT 0,
 
-        rpm REAL DEFAULT 0,
+                arms DOUBLE PRECISION DEFAULT 0,
+                vrms DOUBLE PRECISION DEFAULT 0,
 
-        ax REAL DEFAULT 0,
-        ay REAL DEFAULT 0,
-        az REAL DEFAULT 0,
+                impulsions INTEGER DEFAULT 0,
 
-        acceleration_rms REAL DEFAULT 0,
+                ecart DOUBLE PRECISION DEFAULT 0,
 
-        vibration REAL DEFAULT 0,
+                heure TEXT,
 
-        impulsions INTEGER DEFAULT 0,
+                etat TEXT,
+                moteur TEXT,
 
-        impulsions_total INTEGER DEFAULT 0,
+                alarme TEXT,
+                probleme TEXT
+            )
 
-        ecart REAL DEFAULT 0,
+        `);
 
-        heure VARCHAR(20),
+        await pool.query(`
 
-        etat VARCHAR(30),
+            CREATE TABLE IF NOT EXISTS commandes (
+                id SERIAL PRIMARY KEY,
+                commande TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                executee BOOLEAN DEFAULT FALSE
+            )
 
-        moteur VARCHAR(10)
+        `);
 
-      )
+        console.log(
+            "Base PostgreSQL initialisée."
+        );
 
-    `);
+    } catch (error) {
 
-    console.log(
-      "PostgreSQL : table historique_moteur OK"
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Erreur initialisation PostgreSQL :",
-      error.message
-    );
-
-  }
+        console.error(
+            "Erreur initialisation PostgreSQL :",
+            error.message
+        );
+    }
 }
-
 
 // ============================================================
 // TELEGRAM
 // ============================================================
 
 const TELEGRAM_BOT_TOKEN =
-  process.env.TELEGRAM_BOT_TOKEN;
+    process.env.TELEGRAM_BOT_TOKEN || "";
 
 const TELEGRAM_CHAT_ID =
-  process.env.TELEGRAM_CHAT_ID;
+    process.env.TELEGRAM_CHAT_ID || "";
 
-let derniereAlerteTelegram = "";
 
 async function envoyerTelegram(message) {
 
-  if (
-    !TELEGRAM_BOT_TOKEN ||
-    !TELEGRAM_CHAT_ID
-  ) {
+    if (
+        !TELEGRAM_BOT_TOKEN ||
+        !TELEGRAM_CHAT_ID
+    ) {
 
-    console.log(
-      "Telegram non configure"
-    );
+        console.log(
+            "Telegram non configuré."
+        );
 
-    return;
+        return;
+    }
 
-  }
+    try {
 
-  try {
+        const url =
+            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-    const url =
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        const response =
+            await fetch(url, {
 
-    await fetch(
-      url,
-      {
+                method: "POST",
 
-        method: "POST",
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
 
-        headers: {
-          "Content-Type":
-            "application/json"
-        },
+                body: JSON.stringify({
 
-        body: JSON.stringify({
+                    chat_id:
+                        TELEGRAM_CHAT_ID,
 
-          chat_id:
-            TELEGRAM_CHAT_ID,
+                    text:
+                        message
 
-          text:
-            message
+                })
 
-        })
+            });
 
-      }
-    );
+        const resultat =
+            await response.json();
 
-  } catch (error) {
+        if (!resultat.ok) {
 
-    console.error(
-      "Erreur Telegram :",
-      error.message
-    );
+            console.error(
+                "Erreur Telegram :",
+                resultat
+            );
 
-  }
+        }
 
+    } catch (error) {
+
+        console.error(
+            "Erreur connexion Telegram :",
+            error.message
+        );
+    }
 }
 
 
@@ -196,978 +220,865 @@ async function envoyerTelegram(message) {
 // PAGE PRINCIPALE
 // ============================================================
 
-app.get(
-  "/",
-  (req, res) => {
+app.get("/", (req, res) => {
 
     res.sendFile(
-      __dirname +
-      "/public/index.html"
+        path.join(
+            __dirname,
+            "index.html"
+        )
     );
 
-  }
-);
+});
 
 
 // ============================================================
 // TEST SERVEUR
 // ============================================================
 
-app.get(
-  "/api/test",
-  async (req, res) => {
-
-    let database = "ERREUR";
-
-    try {
-
-      await pool.query(
-        "SELECT NOW()"
-      );
-
-      database = "OK";
-
-    } catch (error) {
-
-      database = "ERREUR";
-
-    }
+app.get("/api/status", (req, res) => {
 
     res.json({
 
-      success: true,
+        success: true,
 
-      serveur:
-        "OK",
+        serveur:
+            "surveillance-moteur",
 
-      database:
-        database,
+        database:
+            !!pool,
 
-      telegram:
-        TELEGRAM_BOT_TOKEN &&
-        TELEGRAM_CHAT_ID
-          ? "CONFIGURE"
-          : "NON CONFIGURE",
-
-      commande:
-        commandeEnAttente
+        timestamp:
+            new Date().toISOString()
 
     });
 
-  }
-);
+});
 
 
 // ============================================================
-// ESP32 → RENDER
-// RECEPTION DES MESURES
+// GET /api/data
 // ============================================================
+//
+// Cette route est utilisée par index.html.
+// Elle renvoie les dernières données reçues de l'ESP32.
+//
 
-app.post(
-  "/api/data",
-  async (req, res) => {
+app.get("/api/data", async (req, res) => {
 
     try {
 
-      const d = req.body || {};
+        if (pool) {
 
+            const result =
+                await pool.query(`
 
-      // ------------------------------------------------------
-      // CONVERSION DES DONNEES
-      // ------------------------------------------------------
+                    SELECT
+                        rpm,
+                        ax,
+                        ay,
+                        az,
+                        arms,
+                        vrms,
+                        impulsions,
+                        ecart,
+                        heure,
+                        etat,
+                        moteur,
+                        alarme,
+                        probleme
 
-      derniereDonnee = {
+                    FROM mesures
 
-        rpm:
-          Number(d.rpm) || 0,
+                    ORDER BY id DESC
 
-        ax:
-          Number(d.ax) || 0,
+                    LIMIT 1
 
-        ay:
-          Number(d.ay) || 0,
+                `);
 
-        az:
-          Number(d.az) || 0,
+            if (
+                result.rows.length > 0
+            ) {
 
-        accelerationRMS:
-          Number(
-            d.accelerationRMS ??
-            d.arms
-          ) || 0,
+                const ligne =
+                    result.rows[0];
 
-        vibration:
-          Number(
-            d.vibration ??
-            d.vrms
-          ) || 0,
+                derniereDonnee = {
 
-        impulsions:
-          Number(
-            d.impulsions
-          ) || 0,
+                    rpm:
+                        Number(ligne.rpm || 0),
 
-        impulsionsTotal:
-          Number(
-            d.impulsionsTotal
-          ) || 0,
+                    ax:
+                        Number(ligne.ax || 0),
 
-        ecart:
-          Number(
-            d.ecart
-          ) || 0,
+                    ay:
+                        Number(ligne.ay || 0),
 
-        heure:
-          d.heure ||
-          "00:00:00",
+                    az:
+                        Number(ligne.az || 0),
 
-        etat:
-          String(
-            d.etat ||
-            "ARRET"
-          ).toUpperCase(),
+                    arms:
+                        Number(ligne.arms || 0),
 
-        moteur:
-          String(
-            d.moteur ||
-            "OFF"
-          ).toUpperCase(),
+                    vrms:
+                        Number(ligne.vrms || 0),
 
-        timestamp:
-          d.timestamp ||
-          new Date().toISOString()
+                    impulsions:
+                        Number(
+                            ligne.impulsions || 0
+                        ),
 
-      };
+                    ecart:
+                        Number(ligne.ecart || 0),
 
+                    heure:
+                        ligne.heure ||
+                        "00:00:00",
 
-      // ------------------------------------------------------
-      // ENREGISTREMENT HISTORIQUE
-      // ------------------------------------------------------
+                    etat:
+                        ligne.etat ||
+                        "ARRET",
 
-      await pool.query(
+                    moteur:
+                        ligne.moteur ||
+                        "OFF",
 
-        `
+                    alarme:
+                        ligne.alarme ||
+                        "OFF",
 
-        INSERT INTO historique_moteur (
+                    probleme:
+                        ligne.probleme ||
+                        "AUCUN"
 
-          timestamp,
+                };
 
-          rpm,
+            }
+        }
 
-          ax,
-          ay,
-          az,
+        res.json({
 
-          acceleration_rms,
+            success: true,
 
-          vibration,
+            ...derniereDonnee
 
-          impulsions,
+        });
 
-          impulsions_total,
+    } catch (error) {
 
-          ecart,
+        console.error(
+            "GET /api/data :",
+            error.message
+        );
+
+        res.json({
+
+            success: true,
+
+            ...derniereDonnee
+
+        });
+
+    }
+
+});
+
+
+// ============================================================
+// POST /api/data
+// ============================================================
+//
+// ESP32 -> Render
+//
+// Format accepté :
+//
+// {
+//   rpm: 2900,
+//   ax: 4.17,
+//   ay: -7.19,
+//   az: 7.73,
+//   arms: 6.55,
+//   vrms: 8.23,
+//   impulsions: 48,
+//   ecart: 0,
+//   heure: "00:02:18",
+//   etat: "NORMAL",
+//   moteur: "ON",
+//   alarme: "OFF",
+//   probleme: "AUCUN"
+// }
+//
+
+app.post("/api/data", async (req, res) => {
+
+    try {
+
+        const body =
+            req.body || {};
+
+
+        // ====================================================
+        // NORMALISATION
+        // ====================================================
+
+        const rpm =
+            Number(
+                body.rpm ?? 0
+            );
+
+        const ax =
+            Number(
+                body.ax ?? 0
+            );
+
+        const ay =
+            Number(
+                body.ay ?? 0
+            );
+
+        const az =
+            Number(
+                body.az ?? 0
+            );
+
+        const arms =
+            Number(
+                body.arms ??
+                body.accelerationRMS ??
+                0
+            );
 
-          heure,
+        const vrms =
+            Number(
+                body.vrms ??
+                body.vibration ??
+                0
+            );
 
-          etat,
+        const impulsions =
+            Number(
+                body.impulsions ?? 0
+            );
 
-          moteur
+        const ecart =
+            Number(
+                body.ecart ?? 0
+            );
 
-        )
+        const heure =
+            String(
+                body.heure ||
+                new Date().toLocaleTimeString(
+                    "fr-FR",
+                    {
+                        hour12: false
+                    }
+                )
+            );
 
-        VALUES (
+        const etat =
+            String(
+                body.etat ||
+                "ARRET"
+            );
 
-          $1,
+        const moteur =
+            String(
+                body.moteur ||
+                "OFF"
+            );
 
-          $2,
+        const alarme =
+            String(
+                body.alarme ||
+                "OFF"
+            );
 
-          $3,
-          $4,
-          $5,
+        const probleme =
+            String(
+                body.probleme ||
+                "AUCUN"
+            );
 
-          $6,
 
-          $7,
+        // ====================================================
+        // MISE A JOUR DERNIERE DONNEE
+        // ====================================================
 
-          $8,
+        derniereDonnee = {
 
-          $9,
+            rpm,
+            ax,
+            ay,
+            az,
 
-          $10,
+            arms,
+            vrms,
 
-          $11,
+            impulsions,
 
-          $12,
+            ecart,
 
-          $13
+            heure,
 
-        )
+            etat,
+            moteur,
 
-        `,
+            alarme,
+            probleme
 
-        [
+        };
 
-          derniereDonnee.timestamp,
 
-          derniereDonnee.rpm,
+        console.log(
+            "DONNEES ESP32 :",
+            derniereDonnee
+        );
 
-          derniereDonnee.ax,
 
-          derniereDonnee.ay,
+        // ====================================================
+        // ENREGISTREMENT POSTGRESQL
+        // ====================================================
 
-          derniereDonnee.az,
+        if (pool) {
 
-          derniereDonnee.accelerationRMS,
+            await pool.query(`
 
-          derniereDonnee.vibration,
+                INSERT INTO mesures (
 
-          derniereDonnee.impulsions,
+                    rpm,
+                    ax,
+                    ay,
+                    az,
 
-          derniereDonnee.impulsionsTotal,
+                    arms,
+                    vrms,
 
-          derniereDonnee.ecart,
+                    impulsions,
 
-          derniereDonnee.heure,
+                    ecart,
 
-          derniereDonnee.etat,
+                    heure,
 
-          derniereDonnee.moteur
+                    etat,
+                    moteur,
 
-        ]
+                    alarme,
+                    probleme
 
-      );
+                )
 
+                VALUES (
 
-      // ------------------------------------------------------
-      // ALERTE TELEGRAM
-      // ------------------------------------------------------
+                    $1, $2, $3, $4,
 
-      if (
-        derniereDonnee.etat ===
-        "ANOMALIE"
-      ) {
+                    $5, $6,
 
-        const message =
+                    $7,
 
-          `🚨 ALERTE MOTEUR
+                    $8,
 
-RPM : ${derniereDonnee.rpm.toFixed(2)}
-AX : ${derniereDonnee.ax.toFixed(2)}
-AY : ${derniereDonnee.ay.toFixed(2)}
-AZ : ${derniereDonnee.az.toFixed(2)}
+                    $9,
 
-ARMS : ${derniereDonnee.accelerationRMS.toFixed(2)} m/s²
-VRMS : ${derniereDonnee.vibration.toFixed(2)} mm/s
+                    $10, $11,
 
-Impulsions : ${derniereDonnee.impulsions}
-Impulsions totales : ${derniereDonnee.impulsionsTotal}
+                    $12, $13
 
-Ecart RPM : ${derniereDonnee.ecart.toFixed(2)} %
+                )
 
-Heure : ${derniereDonnee.heure}
+            `, [
 
-Etat : ANOMALIE
-Moteur : ${derniereDonnee.moteur}`;
+                rpm,
+                ax,
+                ay,
+                az,
 
+                arms,
+                vrms,
 
-        if (
-          message !==
-          derniereAlerteTelegram
-        ) {
+                impulsions,
 
-          await envoyerTelegram(
-            message
-          );
+                ecart,
 
-          derniereAlerteTelegram =
-            message;
+                heure,
+
+                etat,
+                moteur,
+
+                alarme,
+                probleme
+
+            ]);
 
         }
 
-      } else {
 
-        derniereAlerteTelegram =
-          "";
+        // ====================================================
+        // TELEGRAM SI ALARME
+        // ====================================================
 
-      }
+        if (
+            String(alarme).toUpperCase()
+            === "ON"
+        ) {
 
+            const message =
 
-      // ------------------------------------------------------
-      // REPONSE ESP32
-      // ------------------------------------------------------
+                "🚨 ALARME MOTEUR\n\n" +
 
-      res.json({
+                "RPM : " +
+                rpm.toFixed(2) +
+                " tr/min\n" +
 
-        success: true,
+                "VRMS : " +
+                vrms.toFixed(2) +
+                " mm/s\n" +
 
-        message:
-          "Donnee enregistree",
+                "Impulsions : " +
+                impulsions +
+                "\n\n" +
 
-        commande:
-          commandeEnAttente,
+                "Problème : " +
+                probleme +
+                "\n\n" +
 
-        data:
-          derniereDonnee
+                "Heure : " +
+                heure;
 
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        "Erreur POST /api/data :",
-        error
-      );
-
-      res.status(500).json({
-
-        success: false,
-
-        error:
-          error.message
-
-      });
-
-    }
-
-  }
-);
+            await envoyerTelegram(
+                message
+            );
+        }
 
 
-// ============================================================
-// DERNIERE DONNEE
-// ============================================================
+        // ====================================================
+        // REPONSE
+        // ====================================================
 
-app.get(
-  "/api/latest",
-  (req, res) => {
+        res.json({
 
-    res.json(
-      derniereDonnee
-    );
+            success: true,
 
-  }
-);
+            message:
+                "Mesure enregistrée",
 
-
-// ============================================================
-// WEB → RENDER
-// NOUVELLE COMMANDE START / STOP
-// ============================================================
-
-app.post(
-  "/api/command",
-  (req, res) => {
-
-    try {
-
-      const commande =
-        String(
-          req.body.commande ||
-          req.body.command ||
-          ""
-        ).toUpperCase();
-
-
-      if (
-        commande !== "START" &&
-        commande !== "STOP"
-      ) {
-
-        return res.status(400).json({
-
-          success: false,
-
-          error:
-            "Commande invalide. Utiliser START ou STOP."
+            data:
+                derniereDonnee
 
         });
 
-      }
+
+    } catch (error) {
+
+        console.error(
+            "POST /api/data :",
+            error
+        );
+
+        res.status(500).json({
+
+            success: false,
+
+            error:
+                "Erreur enregistrement mesure",
+
+            details:
+                error.message
+
+        });
+
+    }
+
+});
 
 
-      // ------------------------------------------------------
-      // ENREGISTRER LA COMMANDE
-      // ------------------------------------------------------
+// ============================================================
+// GET /api/history
+// ============================================================
+//
+// Historique PostgreSQL
+//
 
-      commandeEnAttente =
-        commande;
+app.get("/api/history", async (req, res) => {
 
-      numeroCommande++;
+    try {
 
+        if (!pool) {
 
-      console.log(
-        "================================"
-      );
+            return res.status(500).json({
 
-      console.log(
-        "NOUVELLE COMMANDE :",
-        commande
-      );
+                success: false,
 
-      console.log(
-        "NUMERO :",
-        numeroCommande
-      );
+                error:
+                    "DATABASE_URL non configurée"
 
-      console.log(
-        "================================"
-      );
+            });
+
+        }
 
 
-      res.json({
+        const limite =
+            Math.min(
+                Number(
+                    req.query.limit || 100
+                ),
+                1000
+            );
 
-        success: true,
 
-        commande:
-          commande,
+        const result =
+            await pool.query(`
 
-        numeroCommande:
-          numeroCommande,
+                SELECT
 
-        message:
-          `Commande ${commande} en attente pour l'ESP32`
+                    id,
 
-      });
+                    created_at,
+
+                    rpm,
+
+                    ax,
+                    ay,
+                    az,
+
+                    arms,
+                    vrms,
+
+                    impulsions,
+
+                    ecart,
+
+                    heure,
+
+                    etat,
+                    moteur,
+
+                    alarme,
+                    probleme
+
+                FROM mesures
+
+                ORDER BY id DESC
+
+                LIMIT $1
+
+            `, [
+
+                limite
+
+            ]);
+
+
+        res.json({
+
+            success: true,
+
+            count:
+                result.rows.length,
+
+            data:
+                result.rows
+
+        });
 
 
     } catch (error) {
 
-      console.error(
-        error
-      );
+        console.error(
+            "GET /api/history :",
+            error.message
+        );
 
-      res.status(500).json({
+        res.status(500).json({
 
-        success: false,
+            success: false,
 
-        error:
-          error.message
+            error:
+                "Erreur récupération historique",
 
-      });
+            details:
+                error.message
+
+        });
 
     }
 
-  }
-);
+});
 
 
 // ============================================================
-// ESP32 → RENDER
-// RECUPERER LA COMMANDE
+// POST /api/command
 // ============================================================
 //
-// L'ESP32 doit appeler cette URL régulièrement.
+// Interface Web -> Render
 //
-// Exemple :
+// Reçoit START ou STOP.
+//
+
+app.post("/api/command", async (req, res) => {
+
+    try {
+
+        let commande =
+            req.body?.command ||
+            req.body?.commande;
+
+
+        if (!commande) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                error:
+                    "Commande absente"
+
+            });
+
+        }
+
+
+        commande =
+            String(
+                commande
+            )
+            .trim()
+            .toUpperCase();
+
+
+        if (
+            commande !== "START" &&
+            commande !== "STOP"
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                error:
+                    "Commande invalide"
+
+            });
+
+        }
+
+
+        numeroCommande++;
+
+
+        derniereCommande =
+            commande;
+
+
+        // ====================================================
+        // POSTGRESQL
+        // ====================================================
+
+        if (pool) {
+
+            await pool.query(`
+
+                INSERT INTO commandes (
+                    commande,
+                    executee
+                )
+
+                VALUES ($1, FALSE)
+
+            `, [
+
+                commande
+
+            ]);
+
+        }
+
+
+        console.log(
+            "NOUVELLE COMMANDE :",
+            commande
+        );
+
+
+        res.json({
+
+            success: true,
+
+            commande:
+
+                commande,
+
+            numeroCommande:
+
+                numeroCommande
+
+        });
+
+
+    } catch (error) {
+
+        console.error(
+            "POST /api/command :",
+            error.message
+        );
+
+        res.status(500).json({
+
+            success: false,
+
+            error:
+                "Erreur commande",
+
+            details:
+                error.message
+
+        });
+
+    }
+
+});
+
+
+// ============================================================
 // GET /api/command
-//
-// ============================================================
-
-app.get(
-  "/api/command",
-  (req, res) => {
-
-    res.json({
-
-      success: true,
-
-      commande:
-        commandeEnAttente,
-
-      numeroCommande:
-        numeroCommande
-
-    });
-
-  }
-);
-
-
-// ============================================================
-// CONFIRMATION DE COMMANDE PAR ESP32
 // ============================================================
 //
-// Après avoir reçu et exécuté START/STOP,
-// l'ESP32 peut appeler :
+// ESP32 -> Render
 //
-// POST /api/command/ack
+// L'ESP32 vient chercher START ou STOP.
 //
-// Body :
-// {
-//   "commande": "START",
-//   "numeroCommande": 5
-// }
-//
-// ============================================================
 
-app.post(
-  "/api/command/ack",
-  (req, res) => {
-
-    const commande =
-      String(
-        req.body.commande ||
-        ""
-      ).toUpperCase();
-
-    const numero =
-      Number(
-        req.body.numeroCommande
-      );
-
-
-    if (
-      commande !== "START" &&
-      commande !== "STOP"
-    ) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        error:
-          "Commande invalide"
-
-      });
-
-    }
-
-
-    derniereCommandeEnvoyee =
-      commande;
-
-
-    console.log(
-      "ESP32 CONFIRME :",
-      commande,
-      "numero :",
-      numero
-    );
-
-
-    res.json({
-
-      success: true,
-
-      message:
-        "Commande confirmee",
-
-      commande:
-        commande,
-
-      numeroCommande:
-        numero
-
-    });
-
-  }
-);
-
-
-// ============================================================
-// HISTORIQUE
-// ============================================================
-
-app.get(
-  "/api/history",
-  async (req, res) => {
+app.get("/api/command", async (req, res) => {
 
     try {
 
-      let limit =
-        Number(
-          req.query.limit
-        ) || 100;
+        if (pool) {
+
+            const result =
+                await pool.query(`
+
+                    SELECT
+                        id,
+                        commande,
+                        created_at
+
+                    FROM commandes
+
+                    WHERE executee = FALSE
+
+                    ORDER BY id ASC
+
+                    LIMIT 1
+
+                `);
 
 
-      // Sécurité
+            if (
+                result.rows.length > 0
+            ) {
 
-      if (
-        limit < 1
-      ) {
-
-        limit = 100;
-
-      }
+                const commande =
+                    result.rows[0];
 
 
-      if (
-        limit > 1000
-      ) {
+                // Marquer comme exécutée
 
-        limit = 1000;
+                await pool.query(`
 
-      }
+                    UPDATE commandes
 
+                    SET executee = TRUE
 
-      const result =
-        await pool.query(
+                    WHERE id = $1
 
-          `
+                `, [
 
-          SELECT
+                    commande.id
 
-            id,
-
-            timestamp,
-
-            rpm,
-
-            ax,
-            ay,
-            az,
-
-            acceleration_rms
-              AS "accelerationRMS",
-
-            vibration,
-
-            impulsions,
-
-            impulsions_total
-              AS "impulsionsTotal",
-
-            ecart,
-
-            heure,
-
-            etat,
-
-            moteur
-
-          FROM historique_moteur
-
-          ORDER BY timestamp DESC
-
-          LIMIT $1
-
-          `,
-
-          [limit]
-
-        );
+                ]);
 
 
-      res.json({
-
-        success: true,
-
-        count:
-          result.rows.length,
-
-        data:
-          result.rows
-
-      });
+                derniereCommande =
+                    commande.commande;
 
 
-    } catch (error) {
+                res.json({
 
-      console.error(
-        "Erreur historique :",
-        error
-      );
+                    success: true,
 
-      res.status(500).json({
+                    commande:
+                        commande.commande,
 
-        success: false,
+                    numeroCommande:
+                        commande.id
 
-        error:
-          error.message
+                });
 
-      });
+                return;
 
-    }
-
-  }
-);
+            }
+        }
 
 
-// ============================================================
-// HISTORIQUE PAR DATE
-// ============================================================
+        // Aucune nouvelle commande
 
-app.get(
-  "/api/history/date",
-  async (req, res) => {
+        res.json({
 
-    try {
+            success: true,
 
-      const debut =
-        req.query.debut;
+            commande:
+                "NONE",
 
-      const fin =
-        req.query.fin;
-
-
-      if (
-        !debut ||
-        !fin
-      ) {
-
-        return res.status(400).json({
-
-          success: false,
-
-          error:
-            "Utiliser ?debut=DATE&fin=DATE"
+            numeroCommande:
+                0
 
         });
 
-      }
 
+    } catch (error) {
 
-      const result =
-        await pool.query(
-
-          `
-
-          SELECT
-
-            id,
-
-            timestamp,
-
-            rpm,
-
-            ax,
-            ay,
-            az,
-
-            acceleration_rms
-              AS "accelerationRMS",
-
-            vibration,
-
-            impulsions,
-
-            impulsions_total
-              AS "impulsionsTotal",
-
-            ecart,
-
-            heure,
-
-            etat,
-
-            moteur
-
-          FROM historique_moteur
-
-          WHERE timestamp
-          BETWEEN $1 AND $2
-
-          ORDER BY timestamp ASC
-
-          `,
-
-          [
-            debut,
-            fin
-          ]
-
+        console.error(
+            "GET /api/command :",
+            error.message
         );
 
+        res.status(500).json({
 
-      res.json({
+            success: false,
 
-        success: true,
+            error:
+                "Erreur récupération commande",
 
-        count:
-          result.rows.length,
+            details:
+                error.message
 
-        data:
-          result.rows
-
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        error
-      );
-
-      res.status(500).json({
-
-        success: false,
-
-        error:
-          error.message
-
-      });
+        });
 
     }
 
-  }
-);
+});
 
 
 // ============================================================
-// HISTORIQUE DES ANOMALIES
-// ============================================================
-
-app.get(
-  "/api/alerts",
-  async (req, res) => {
-
-    try {
-
-      const result =
-        await pool.query(`
-
-          SELECT
-
-            id,
-
-            timestamp,
-
-            rpm,
-
-            vibration,
-
-            ecart,
-
-            heure,
-
-            etat,
-
-            moteur
-
-          FROM historique_moteur
-
-          WHERE etat = 'ANOMALIE'
-
-          ORDER BY timestamp DESC
-
-          LIMIT 100
-
-        `);
-
-
-      res.json({
-
-        success: true,
-
-        count:
-          result.rows.length,
-
-        data:
-          result.rows
-
-      });
-
-
-    } catch (error) {
-
-      res.status(500).json({
-
-        success: false,
-
-        error:
-          error.message
-
-      });
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// STATISTIQUES
-// ============================================================
-
-app.get(
-  "/api/stats",
-  async (req, res) => {
-
-    try {
-
-      const result =
-        await pool.query(`
-
-          SELECT
-
-            COUNT(*) AS total_mesures,
-
-            COALESCE(
-              AVG(rpm),
-              0
-            ) AS rpm_moyen,
-
-            COALESCE(
-              AVG(vibration),
-              0
-            ) AS vibration_moyenne,
-
-            COALESCE(
-              MAX(vibration),
-              0
-            ) AS vibration_max,
-
-            COUNT(
-              CASE
-                WHEN etat = 'ANOMALIE'
-                THEN 1
-              END
-            ) AS nombre_anomalies
-
-          FROM historique_moteur
-
-        `);
-
-
-      res.json({
-
-        success: true,
-
-        data:
-          result.rows[0]
-
-      });
-
-
-    } catch (error) {
-
-      res.status(500).json({
-
-        success: false,
-
-        error:
-          error.message
-
-      });
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// 404
+// ROUTE 404
 // ============================================================
 
 app.use(
-  (req, res) => {
+    (req, res) => {
 
-    res.status(404).json({
+        res.status(404).json({
 
-      success: false,
+            success: false,
 
-      error:
-        "Route introuvable",
+            error:
+                "Route introuvable",
 
-      route:
-        req.originalUrl
+            route:
+                req.originalUrl
 
-    });
+        });
 
-  }
+    }
 );
 
 
@@ -1175,29 +1086,66 @@ app.use(
 // DEMARRAGE
 // ============================================================
 
-app.listen(
-  PORT,
-  async () => {
-
-    console.log(
-      "========================================"
-    );
-
-    console.log(
-      "SERVEUR SURVEILLANCE MOTEUR"
-    );
-
-    console.log(
-      "Port :",
-      PORT
-    );
-
-    console.log(
-      "========================================"
-    );
-
+async function demarrer() {
 
     await initialiserBase();
 
-  }
-);
+    app.listen(
+        PORT,
+        "0.0.0.0",
+        () => {
+
+            console.log();
+            console.log(
+                "======================================"
+            );
+
+            console.log(
+                " SERVEUR SURVEILLANCE MOTEUR"
+            );
+
+            console.log(
+                "======================================"
+            );
+
+            console.log(
+                "PORT :",
+                PORT
+            );
+
+            console.log(
+                "API DATA : POST/GET /api/data"
+            );
+
+            console.log(
+                "HISTORIQUE : GET /api/history"
+            );
+
+            console.log(
+                "COMMAND : POST/GET /api/command"
+            );
+
+            console.log(
+                "DATABASE :",
+                pool
+                    ? "CONNECTEE"
+                    : "NON CONFIGUREE"
+            );
+
+            console.log(
+                "TELEGRAM :",
+                TELEGRAM_BOT_TOKEN
+                    ? "CONFIGURE"
+                    : "NON CONFIGURE"
+            );
+
+            console.log(
+                "======================================"
+            );
+
+        }
+    );
+
+}
+
+demarrer();
