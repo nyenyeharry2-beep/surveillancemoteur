@@ -2,216 +2,316 @@
 <html lang="fr">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Surveillance du moteur</title>
+<meta charset="UTF-8">
 
-    <style>
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
 
-        * {
-            box-sizing: border-box;
-        }
+<title>Surveillance du moteur</title>
 
-        body {
-            margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
-            background: #f4f6f8;
-            color: #1f2937;
-        }
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-        .container {
-            width: 95%;
-            max-width: 1300px;
-            margin: 30px auto;
-        }
+<style>
 
-        header {
-            background: #111827;
-            color: white;
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-            margin-bottom: 20px;
-        }
+* {
+    box-sizing: border-box;
+}
 
-        header h1 {
-            margin: 0 0 10px 0;
-        }
+body {
 
-        #connexion {
-            font-weight: bold;
-        }
+    margin: 0;
 
-        .card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
+    font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
 
-        .status {
-            text-align: center;
-        }
+    background: #f4f6f8;
 
-        .statusValue {
-            font-size: 30px;
-            font-weight: bold;
-            margin: 8px;
-        }
+    color: #1f2937;
+}
 
-        #etat {
-            color: #16a34a;
-        }
+.container {
 
-        #moteur {
-            color: #2563eb;
-        }
+    width: 95%;
 
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 15px;
-        }
+    max-width: 1300px;
 
-        .card h2 {
-            margin-top: 0;
-        }
+    margin: 30px auto;
+}
 
-        .card h3 {
-            margin-top: 0;
-            color: #374151;
-        }
+header {
 
-        .value {
-            font-size: 28px;
-            font-weight: bold;
-        }
+    background: #111827;
 
-        .alarm {
-            text-align: center;
-            border: 3px solid transparent;
-        }
+    color: white;
 
-        #alarme {
-            font-size: 28px;
-            font-weight: bold;
-        }
+    padding: 25px;
 
-        #probleme {
-            font-size: 20px;
-            font-weight: bold;
-            margin-top: 10px;
-        }
+    border-radius: 15px;
 
-        .buttons {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
+    text-align: center;
 
-        button {
-            border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-        }
+    margin-bottom: 20px;
+}
 
-        .start {
-            background: #16a34a;
-            color: white;
-        }
+header h1 {
 
-        .stop {
-            background: #dc2626;
-            color: white;
-        }
+    margin:
+        0 0 10px 0;
+}
 
-        .historyButton {
-            background: #2563eb;
-            color: white;
-            width: 100%;
-            margin-top: 15px;
-        }
+#connexion {
 
-        button:hover {
-            opacity: 0.85;
-        }
+    font-weight: bold;
+}
 
-        .message {
-            text-align: center;
-            margin-top: 15px;
-            font-weight: bold;
-        }
+.card {
 
-        .history {
-            display: none;
-        }
+    background: white;
 
-        .history.active {
-            display: block;
-        }
+    border-radius: 15px;
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            overflow-x: auto;
-        }
+    padding: 20px;
 
-        th,
-        td {
-            border: 1px solid #d1d5db;
-            padding: 10px;
-            text-align: center;
-        }
+    margin-bottom: 20px;
 
-        th {
-            background: #111827;
-            color: white;
-        }
+    box-shadow:
+        0 4px 12px
+        rgba(0,0,0,0.08);
+}
 
-        .tableContainer {
-            overflow-x: auto;
-        }
+.status {
 
-        canvas {
-            width: 100% !important;
-            max-height: 350px;
-        }
+    text-align: center;
+}
 
-        .footer {
-            text-align: center;
-            color: #6b7280;
-            margin-top: 30px;
-            padding: 20px;
-        }
+.statusValue {
 
-        @media (max-width: 600px) {
+    font-size: 30px;
 
-            .container {
-                width: 92%;
-                margin: 15px auto;
-            }
+    font-weight: bold;
 
-            .value {
-                font-size: 23px;
-            }
+    margin: 8px;
+}
 
-            button {
-                width: 100%;
-            }
+#etat {
 
-        }
+    color: #16a34a;
+}
 
-    </style>
+#moteur {
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    color: #2563eb;
+}
+
+.grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(220px, 1fr)
+        );
+
+    gap: 15px;
+}
+
+.card h2 {
+
+    margin-top: 0;
+}
+
+.card h3 {
+
+    margin-top: 0;
+
+    color: #374151;
+}
+
+.value {
+
+    font-size: 28px;
+
+    font-weight: bold;
+}
+
+.alarm {
+
+    text-align: center;
+
+    border:
+        3px solid transparent;
+}
+
+#alarme {
+
+    font-size: 28px;
+
+    font-weight: bold;
+}
+
+#probleme {
+
+    font-size: 20px;
+
+    font-weight: bold;
+
+    margin-top: 10px;
+}
+
+.buttons {
+
+    display: flex;
+
+    justify-content: center;
+
+    gap: 15px;
+
+    flex-wrap: wrap;
+}
+
+button {
+
+    border: none;
+
+    padding: 15px 30px;
+
+    border-radius: 10px;
+
+    font-size: 18px;
+
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+button:hover {
+
+    opacity: 0.85;
+}
+
+.start {
+
+    background: #16a34a;
+
+    color: white;
+}
+
+.stop {
+
+    background: #dc2626;
+
+    color: white;
+}
+
+.historyButton {
+
+    background: #2563eb;
+
+    color: white;
+
+    width: 100%;
+
+    margin-top: 15px;
+}
+
+.message {
+
+    text-align: center;
+
+    margin-top: 15px;
+
+    font-weight: bold;
+}
+
+.history {
+
+    display: none;
+}
+
+.history.active {
+
+    display: block;
+}
+
+.tableContainer {
+
+    overflow-x: auto;
+}
+
+table {
+
+    width: 100%;
+
+    border-collapse: collapse;
+
+    margin-top: 15px;
+
+    min-width: 1200px;
+}
+
+th,
+td {
+
+    border:
+        1px solid #d1d5db;
+
+    padding: 10px;
+
+    text-align: center;
+}
+
+th {
+
+    background: #111827;
+
+    color: white;
+}
+
+canvas {
+
+    width: 100% !important;
+
+    max-height: 350px;
+}
+
+.footer {
+
+    text-align: center;
+
+    color: #6b7280;
+
+    margin-top: 30px;
+
+    padding: 20px;
+}
+
+@media (max-width: 600px) {
+
+    .container {
+
+        width: 92%;
+
+        margin: 15px auto;
+    }
+
+    .value {
+
+        font-size: 23px;
+    }
+
+    button {
+
+        width: 100%;
+    }
+}
+
+</style>
 
 </head>
 
@@ -219,430 +319,343 @@
 
 <div class="container">
 
-    <!-- ================================================= -->
-    <!-- TITRE -->
-    <!-- ================================================= -->
+<header>
 
-    <header>
+<h1>
+SURVEILLANCE DU MOTEUR
+</h1>
 
-        <h1>
-            SURVEILLANCE DU MOTEUR
-        </h1>
+<div id="connexion">
+Connexion : EN ATTENTE
+</div>
 
-        <div id="connexion">
-            Connexion : EN ATTENTE
-        </div>
+</header>
 
-    </header>
 
+<!-- ETAT -->
 
-    <!-- ================================================= -->
-    <!-- ETAT DU MOTEUR -->
-    <!-- ================================================= -->
+<div class="card status">
 
-    <div class="card status">
+<h2>
+ÉTAT DU MOTEUR
+</h2>
 
-        <h2>
-            ÉTAT DU MOTEUR
-        </h2>
+<div
+    id="etat"
+    class="statusValue"
+>
+ARRET
+</div>
 
-        <div
-            id="etat"
-            class="statusValue"
-        >
-            ARRET
-        </div>
+<div
+    id="moteur"
+    class="statusValue"
+>
+OFF
+</div>
 
-        <div
-            id="moteur"
-            class="statusValue"
-        >
-            OFF
-        </div>
+</div>
 
-    </div>
 
+<!-- ALARME -->
 
-    <!-- ================================================= -->
-    <!-- ALARME -->
-    <!-- ================================================= -->
+<div class="card alarm">
 
-    <div class="card alarm">
+<h2>
+ALARME
+</h2>
 
-        <h2>
-            ALARME
-        </h2>
+<div id="alarme">
+OFF
+</div>
 
-        <div id="alarme">
-            OFF
-        </div>
+<div id="probleme">
+AUCUN
+</div>
 
-        <div id="probleme">
-            AUCUN
-        </div>
+</div>
 
-    </div>
 
+<!-- DONNEES -->
 
-    <!-- ================================================= -->
-    <!-- DONNEES MOTEUR -->
-    <!-- ================================================= -->
+<div class="card">
 
-    <div class="card">
+<h2>
+📊 DONNÉES MOTEUR
+</h2>
 
-        <h2>
-            📊 DONNÉES MOTEUR
-        </h2>
+<div class="grid">
 
-        <div class="grid">
 
+<div class="card">
 
-            <!-- RPM -->
+<h3>RPM</h3>
 
-            <div class="card">
+<div
+    id="rpm"
+    class="value"
+>
+0.00 tr/min
+</div>
 
-                <h3>
-                    RPM
-                </h3>
+</div>
 
-                <div
-                    id="rpm"
-                    class="value"
-                >
-                    0.00 tr/min
-                </div>
 
-            </div>
+<div class="card">
 
+<h3>AX</h3>
 
-            <!-- AX -->
+<div
+    id="ax"
+    class="value"
+>
+0.00 m/s²
+</div>
 
-            <div class="card">
+</div>
 
-                <h3>
-                    AX
-                </h3>
 
-                <div
-                    id="ax"
-                    class="value"
-                >
-                    0.00 m/s²
-                </div>
+<div class="card">
 
-            </div>
+<h3>AY</h3>
 
+<div
+    id="ay"
+    class="value"
+>
+0.00 m/s²
+</div>
 
-            <!-- AY -->
+</div>
 
-            <div class="card">
 
-                <h3>
-                    AY
-                </h3>
+<div class="card">
 
-                <div
-                    id="ay"
-                    class="value"
-                >
-                    0.00 m/s²
-                </div>
+<h3>AZ</h3>
 
-            </div>
+<div
+    id="az"
+    class="value"
+>
+0.00 m/s²
+</div>
 
+</div>
 
-            <!-- AZ -->
 
-            <div class="card">
+<div class="card">
 
-                <h3>
-                    AZ
-                </h3>
+<h3>Accélération RMS</h3>
 
-                <div
-                    id="az"
-                    class="value"
-                >
-                    0.00 m/s²
-                </div>
+<div
+    id="arms"
+    class="value"
+>
+0.00 m/s²
+</div>
 
-            </div>
+</div>
 
 
-            <!-- ARMS -->
+<div class="card">
 
-            <div class="card">
+<h3>Vibration RMS</h3>
 
-                <h3>
-                    Accélération RMS
-                </h3>
+<div
+    id="vrms"
+    class="value"
+>
+0.00 mm/s
+</div>
 
-                <div
-                    id="arms"
-                    class="value"
-                >
-                    0.00 m/s²
-                </div>
+</div>
 
-            </div>
 
+<div class="card">
 
-            <!-- VRMS -->
+<h3>Impulsions</h3>
 
-            <div class="card">
+<div
+    id="impulsions"
+    class="value"
+>
+0
+</div>
 
-                <h3>
-                    Vibration RMS
-                </h3>
+</div>
 
-                <div
-                    id="vrms"
-                    class="value"
-                >
-                    0.00 mm/s
-                </div>
 
-            </div>
+<div class="card">
 
+<h3>Écart RPM</h3>
 
-            <!-- IMPULSIONS -->
+<div
+    id="ecart"
+    class="value"
+>
+0.00 %
+</div>
 
-            <div class="card">
+</div>
 
-                <h3>
-                    Impulsions
-                </h3>
 
-                <div
-                    id="impulsions"
-                    class="value"
-                >
-                    0
-                </div>
+<div class="card">
 
-            </div>
+<h3>Heure</h3>
 
+<div
+    id="heure"
+    class="value"
+>
+00:00:00
+</div>
 
-            <!-- ECART RPM -->
+</div>
 
-            <div class="card">
 
-                <h3>
-                    Écart RPM
-                </h3>
+</div>
 
-                <div
-                    id="ecart"
-                    class="value"
-                >
-                    0.00 %
-                </div>
+</div>
 
-            </div>
 
+<!-- COMMANDES -->
 
-            <!-- HEURE -->
+<div class="card">
 
-            <div class="card">
+<h2>
+COMMANDE DU MOTEUR
+</h2>
 
-                <h3>
-                    Heure
-                </h3>
+<div class="buttons">
 
-                <div
-                    id="heure"
-                    class="value"
-                >
-                    00:00:00
-                </div>
+<button
+    class="start"
+    onclick="envoyerCommande('START')"
+>
+▶ DÉMARRER
+</button>
 
-            </div>
+<button
+    class="stop"
+    onclick="envoyerCommande('STOP')"
+>
+■ ARRÊTER
+</button>
 
-        </div>
+</div>
 
-    </div>
+<div
+    id="message"
+    class="message"
+>
+</div>
 
+</div>
 
-    <!-- ================================================= -->
-    <!-- COMMANDES -->
-    <!-- ================================================= -->
 
-    <div class="card">
+<!-- HISTORIQUE -->
 
-        <h2>
-            COMMANDE DU MOTEUR
-        </h2>
+<div class="card">
 
-        <div class="buttons">
+<button
+    class="historyButton"
+    onclick="afficherHistorique()"
+>
+📊 HISTORIQUE
+</button>
 
-            <button
-                class="start"
-                onclick="envoyerCommande('START')"
-            >
-                ▶ DÉMARRER
-            </button>
+</div>
 
-            <button
-                class="stop"
-                onclick="envoyerCommande('STOP')"
-            >
-                ■ ARRÊTER
-            </button>
 
-        </div>
+<div
+    id="historiqueSection"
+    class="card history"
+>
 
-        <div
-            id="message"
-            class="message"
-        >
-        </div>
+<h2>
+📊 HISTORIQUE DES DONNÉES
+</h2>
 
-    </div>
+<div class="tableContainer">
 
+<table>
 
-    <!-- ================================================= -->
-    <!-- BOUTON HISTORIQUE -->
-    <!-- ================================================= -->
+<thead>
 
-    <div class="card">
+<tr>
 
-        <button
-            class="historyButton"
-            onclick="afficherHistorique()"
-        >
-            📊 HISTORIQUE
-        </button>
+<th>Heure</th>
 
-    </div>
+<th>RPM</th>
 
+<th>AX</th>
 
-    <!-- ================================================= -->
-    <!-- HISTORIQUE -->
-    <!-- ================================================= -->
+<th>AY</th>
 
-    <div
-        id="historiqueSection"
-        class="card history"
-    >
+<th>AZ</th>
 
-        <h2>
-            📊 HISTORIQUE DES DONNÉES
-        </h2>
+<th>ARMS</th>
 
-        <div class="tableContainer">
+<th>VRMS</th>
 
-            <table>
+<th>Impulsions</th>
 
-                <thead>
+<th>Écart RPM</th>
 
-                    <tr>
+<th>État</th>
 
-                        <th>
-                            Heure
-                        </th>
+<th>Moteur</th>
 
-                        <th>
-                            RPM
-                        </th>
+<th>Alarme</th>
 
-                        <th>
-                            AX
-                        </th>
+<th>Problème</th>
 
-                        <th>
-                            AY
-                        </th>
+</tr>
 
-                        <th>
-                            AZ
-                        </th>
+</thead>
 
-                        <th>
-                            ARMS
-                        </th>
+<tbody id="historiqueBody">
 
-                        <th>
-                            VRMS
-                        </th>
+</tbody>
 
-                        <th>
-                            Impulsions
-                        </th>
+</table>
 
-                        <th>
-                            Écart RPM
-                        </th>
+</div>
 
-                        <th>
-                            État
-                        </th>
+</div>
 
-                        <th>
-                            Moteur
-                        </th>
 
-                        <th>
-                            Alarme
-                        </th>
+<!-- COURBE RPM -->
 
-                        <th>
-                            Problème
-                        </th>
+<div class="card">
 
-                    </tr>
+<h2>
+📈 COURBE RPM
+</h2>
 
-                </thead>
+<canvas id="rpmChart"></canvas>
 
-                <tbody id="historiqueBody">
+</div>
 
-                </tbody>
 
-            </table>
+<!-- COURBE VRMS -->
 
-        </div>
+<div class="card">
 
-    </div>
+<h2>
+📈 COURBE VIBRATION RMS
+</h2>
 
+<canvas id="vrmsChart"></canvas>
 
-    <!-- ================================================= -->
-    <!-- GRAPHIQUE RPM -->
-    <!-- ================================================= -->
+</div>
 
-    <div class="card">
 
-        <h2>
-            📈 COURBE RPM
-        </h2>
+<div class="footer">
 
-        <canvas id="rpmChart"></canvas>
+Système IoT de surveillance moteur
 
-    </div>
-
-
-    <!-- ================================================= -->
-    <!-- GRAPHIQUE VRMS -->
-    <!-- ================================================= -->
-
-    <div class="card">
-
-        <h2>
-            📈 COURBE VIBRATION RMS
-        </h2>
-
-        <canvas id="vrmsChart"></canvas>
-
-    </div>
-
-
-    <!-- ================================================= -->
-    <!-- PIED DE PAGE -->
-    <!-- ================================================= -->
-
-    <div class="footer">
-
-        Système IoT de surveillance moteur
-
-    </div>
+</div>
 
 </div>
 
@@ -660,7 +673,163 @@ let historique = [];
 
 
 // =====================================================
-// CHARGEMENT DES DONNEES ACTUELLES
+// OUTIL NOMBRE
+// =====================================================
+
+function nombre(valeur) {
+
+    const n =
+        Number(valeur);
+
+    return Number.isFinite(n)
+        ? n
+        : 0;
+}
+
+
+// =====================================================
+// AFFICHAGE DONNEES
+// =====================================================
+
+function afficherDonnees(data) {
+
+    document
+        .getElementById("connexion")
+        .textContent =
+            "Connexion : CONNECTÉ";
+
+
+    document
+        .getElementById("rpm")
+        .textContent =
+            nombre(data.rpm)
+                .toFixed(2)
+            + " tr/min";
+
+
+    document
+        .getElementById("ax")
+        .textContent =
+            nombre(data.ax)
+                .toFixed(2)
+            + " m/s²";
+
+
+    document
+        .getElementById("ay")
+        .textContent =
+            nombre(data.ay)
+                .toFixed(2)
+            + " m/s²";
+
+
+    document
+        .getElementById("az")
+        .textContent =
+            nombre(data.az)
+                .toFixed(2)
+            + " m/s²";
+
+
+    document
+        .getElementById("arms")
+        .textContent =
+            nombre(
+                data.arms ??
+                data.accelerationRMS
+            )
+                .toFixed(2)
+            + " m/s²";
+
+
+    document
+        .getElementById("vrms")
+        .textContent =
+            nombre(
+                data.vrms ??
+                data.vibration
+            )
+                .toFixed(2)
+            + " mm/s";
+
+
+    document
+        .getElementById("impulsions")
+        .textContent =
+            nombre(
+                data.impulsions
+            );
+
+
+    document
+        .getElementById("ecart")
+        .textContent =
+            nombre(data.ecart)
+                .toFixed(2)
+            + " %";
+
+
+    document
+        .getElementById("heure")
+        .textContent =
+            data.heure ||
+            "00:00:00";
+
+
+    document
+        .getElementById("etat")
+        .textContent =
+            data.etat ||
+            "ARRET";
+
+
+    document
+        .getElementById("moteur")
+        .textContent =
+            data.moteur ||
+            "OFF";
+
+
+    document
+        .getElementById("alarme")
+        .textContent =
+            data.alarme ||
+            "OFF";
+
+
+    document
+        .getElementById("probleme")
+        .textContent =
+            data.probleme ||
+            "AUCUN";
+
+
+    const blocAlarme =
+        document.querySelector(
+            ".alarm"
+        );
+
+
+    if (
+        String(data.alarme)
+            .toUpperCase()
+            === "ON"
+    ) {
+
+        blocAlarme.style.borderColor =
+            "#dc2626";
+
+    } else {
+
+        blocAlarme.style.borderColor =
+            "transparent";
+    }
+
+}
+
+
+// =====================================================
+// CHARGER DONNEES
 // =====================================================
 
 async function chargerDonnees() {
@@ -671,307 +840,25 @@ async function chargerDonnees() {
             await fetch(
                 "/api/data",
                 {
-                    cache: "no-store"
+                    cache:
+                        "no-store"
                 }
             );
 
         if (!reponse.ok) {
 
             throw new Error(
-                "Erreur HTTP " +
+                "HTTP " +
                 reponse.status
             );
-
         }
 
         const data =
             await reponse.json();
 
+        afficherDonnees(data);
 
-        // =================================================
-        // CONNEXION
-        // =================================================
-
-        document
-            .getElementById("connexion")
-            .textContent =
-                "Connexion : CONNECTÉ";
-
-
-        // =================================================
-        // RPM
-        // =================================================
-
-        document
-            .getElementById("rpm")
-            .textContent =
-                Number(
-                    data.rpm || 0
-                ).toFixed(2)
-                +
-                " tr/min";
-
-
-        // =================================================
-        // AX
-        // =================================================
-
-        document
-            .getElementById("ax")
-            .textContent =
-                Number(
-                    data.ax || 0
-                ).toFixed(2)
-                +
-                " m/s²";
-
-
-        // =================================================
-        // AY
-        // =================================================
-
-        document
-            .getElementById("ay")
-            .textContent =
-                Number(
-                    data.ay || 0
-                ).toFixed(2)
-                +
-                " m/s²";
-
-
-        // =================================================
-        // AZ
-        // =================================================
-
-        document
-            .getElementById("az")
-            .textContent =
-                Number(
-                    data.az || 0
-                ).toFixed(2)
-                +
-                " m/s²";
-
-
-        // =================================================
-        // ARMS
-        // =================================================
-
-        document
-            .getElementById("arms")
-            .textContent =
-                Number(
-                    data.accelerationRMS ||
-                    data.arms ||
-                    0
-                ).toFixed(2)
-                +
-                " m/s²";
-
-
-        // =================================================
-        // VRMS
-        // =================================================
-
-        document
-            .getElementById("vrms")
-            .textContent =
-                Number(
-                    data.vibration ||
-                    data.vrms ||
-                    0
-                ).toFixed(2)
-                +
-                " mm/s";
-
-
-        // =================================================
-        // IMPULSIONS
-        // =================================================
-
-        document
-            .getElementById("impulsions")
-            .textContent =
-                Number(
-                    data.impulsions || 0
-                );
-
-
-        // =================================================
-        // ECART RPM
-        // =================================================
-
-        document
-            .getElementById("ecart")
-            .textContent =
-                Number(
-                    data.ecart || 0
-                ).toFixed(2)
-                +
-                " %";
-
-
-        // =================================================
-        // HEURE
-        // =================================================
-
-        document
-            .getElementById("heure")
-            .textContent =
-                data.heure ||
-                "00:00:00";
-
-
-        // =================================================
-        // ETAT
-        // =================================================
-
-        document
-            .getElementById("etat")
-            .textContent =
-                data.etat ||
-                "ARRET";
-
-
-        // =================================================
-        // MOTEUR
-        // =================================================
-
-        document
-            .getElementById("moteur")
-            .textContent =
-                data.moteur ||
-                "OFF";
-
-
-        // =================================================
-        // ALARME
-        // =================================================
-
-        document
-            .getElementById("alarme")
-            .textContent =
-                data.alarme ||
-                "OFF";
-
-
-        // =================================================
-        // PROBLEME
-        // =================================================
-
-        document
-            .getElementById("probleme")
-            .textContent =
-                data.probleme ||
-                "AUCUN";
-
-
-        // =================================================
-        // MISE A JOUR ALARME
-        // =================================================
-
-        const blocAlarme =
-            document.querySelector(
-                ".alarm"
-            );
-
-        if (
-            String(data.alarme)
-                .toUpperCase() === "ON"
-        ) {
-
-            blocAlarme.style.borderColor =
-                "#dc2626";
-
-        } else {
-
-            blocAlarme.style.borderColor =
-                "transparent";
-        }
-
-
-        // =================================================
-        // AJOUT HISTORIQUE LOCAL
-        // =================================================
-
-        historique.push({
-
-            heure:
-                data.heure ||
-                new Date().toLocaleTimeString(),
-
-            rpm:
-                Number(data.rpm || 0),
-
-            ax:
-                Number(data.ax || 0),
-
-            ay:
-                Number(data.ay || 0),
-
-            az:
-                Number(data.az || 0),
-
-            arms:
-                Number(
-                    data.accelerationRMS ||
-                    data.arms ||
-                    0
-                ),
-
-            vrms:
-                Number(
-                    data.vibration ||
-                    data.vrms ||
-                    0
-                ),
-
-            impulsions:
-                Number(
-                    data.impulsions || 0
-                ),
-
-            ecart:
-                Number(
-                    data.ecart || 0
-                ),
-
-            etat:
-                data.etat ||
-                "ARRET",
-
-            moteur:
-                data.moteur ||
-                "OFF",
-
-            alarme:
-                data.alarme ||
-                "OFF",
-
-            probleme:
-                data.probleme ||
-                "AUCUN"
-
-        });
-
-
-        // Garder les 100 dernières mesures
-
-        if (
-            historique.length > 100
-        ) {
-
-            historique.shift();
-
-        }
-
-
-        mettreAJourGraphiques();
-
-    }
-
-    catch (erreur) {
+    } catch (erreur) {
 
         document
             .getElementById("connexion")
@@ -981,14 +868,64 @@ async function chargerDonnees() {
         console.error(
             erreur
         );
-
     }
-
 }
 
 
 // =====================================================
-// AFFICHER / CACHER HISTORIQUE
+// CHARGER HISTORIQUE POSTGRESQL
+// =====================================================
+
+async function chargerHistorique() {
+
+    try {
+
+        const reponse =
+            await fetch(
+                "/api/history?limit=100",
+                {
+                    cache:
+                        "no-store"
+                }
+            );
+
+        if (!reponse.ok) {
+
+            throw new Error(
+                "HTTP " +
+                reponse.status
+            );
+        }
+
+        const resultat =
+            await reponse.json();
+
+        if (
+            resultat.success
+        ) {
+
+            historique =
+                resultat.data
+                    .slice()
+                    .reverse();
+
+            afficherTableauHistorique();
+
+            mettreAJourGraphiques();
+        }
+
+    } catch (erreur) {
+
+        console.error(
+            "Historique :",
+            erreur
+        );
+    }
+}
+
+
+// =====================================================
+// HISTORIQUE
 // =====================================================
 
 function afficherHistorique() {
@@ -1002,13 +939,19 @@ function afficherHistorique() {
         "active"
     );
 
-    afficherTableauHistorique();
+    if (
+        section.classList.contains(
+            "active"
+        )
+    ) {
 
+        chargerHistorique();
+    }
 }
 
 
 // =====================================================
-// TABLEAU HISTORIQUE
+// TABLEAU
 // =====================================================
 
 function afficherTableauHistorique() {
@@ -1038,54 +981,56 @@ function afficherTableauHistorique() {
 
             ligne.innerHTML = `
 
-                <td>${data.heure}</td>
-
                 <td>
-                    ${data.rpm.toFixed(2)}
+                    ${data.heure || ""}
                 </td>
 
                 <td>
-                    ${data.ax.toFixed(2)}
+                    ${nombre(data.rpm).toFixed(2)}
                 </td>
 
                 <td>
-                    ${data.ay.toFixed(2)}
+                    ${nombre(data.ax).toFixed(2)}
                 </td>
 
                 <td>
-                    ${data.az.toFixed(2)}
+                    ${nombre(data.ay).toFixed(2)}
                 </td>
 
                 <td>
-                    ${data.arms.toFixed(2)}
+                    ${nombre(data.az).toFixed(2)}
                 </td>
 
                 <td>
-                    ${data.vrms.toFixed(2)}
+                    ${nombre(data.arms).toFixed(2)}
                 </td>
 
                 <td>
-                    ${data.impulsions}
+                    ${nombre(data.vrms).toFixed(2)}
                 </td>
 
                 <td>
-                    ${data.ecart.toFixed(2)} %
+                    ${nombre(data.impulsions)}
                 </td>
 
                 <td>
-                    ${data.etat}
+                    ${nombre(data.ecart).toFixed(2)} %
                 </td>
 
                 <td>
-                    ${data.moteur}
+                    ${data.etat || ""}
                 </td>
 
                 <td>
-                    ${data.alarme}
+                    ${data.moteur || ""}
                 </td>
 
                 <td>
-                    ${data.probleme}
+                    ${data.alarme || ""}
+                </td>
+
+                <td>
+                    ${data.probleme || ""}
                 </td>
 
             `;
@@ -1128,7 +1073,8 @@ function initialiserGraphiques() {
             contexteRPM,
             {
 
-                type: "line",
+                type:
+                    "line",
 
                 data: {
 
@@ -1143,32 +1089,31 @@ function initialiserGraphiques() {
 
                             data: [],
 
-                            tension: 0.3
-
+                            tension:
+                                0.3
                         }
 
                     ]
-
                 },
 
                 options: {
 
-                    responsive: true,
+                    responsive:
+                        true,
 
-                    animation: false,
+                    animation:
+                        false,
 
                     scales: {
 
                         y: {
 
-                            beginAtZero: true
+                            beginAtZero:
+                                true
 
                         }
-
                     }
-
                 }
-
             }
         );
 
@@ -1178,7 +1123,8 @@ function initialiserGraphiques() {
             contexteVRMS,
             {
 
-                type: "line",
+                type:
+                    "line",
 
                 data: {
 
@@ -1193,35 +1139,33 @@ function initialiserGraphiques() {
 
                             data: [],
 
-                            tension: 0.3
-
+                            tension:
+                                0.3
                         }
 
                     ]
-
                 },
 
                 options: {
 
-                    responsive: true,
+                    responsive:
+                        true,
 
-                    animation: false,
+                    animation:
+                        false,
 
                     scales: {
 
                         y: {
 
-                            beginAtZero: true
+                            beginAtZero:
+                                true
 
                         }
-
                     }
-
                 }
-
             }
         );
-
 }
 
 
@@ -1246,19 +1190,23 @@ function mettreAJourGraphiques() {
 
     const labels =
         donnees.map(
-            d => d.heure
+            d =>
+                d.heure ||
+                ""
         );
 
 
     const rpm =
         donnees.map(
-            d => d.rpm
+            d =>
+                nombre(d.rpm)
         );
 
 
     const vrms =
         donnees.map(
-            d => d.vrms
+            d =>
+                nombre(d.vrms)
         );
 
 
@@ -1278,29 +1226,11 @@ function mettreAJourGraphiques() {
         vrms;
 
     vrmsChart.update();
-
-
-    const section =
-        document.getElementById(
-            "historiqueSection"
-        );
-
-
-    if (
-        section.classList.contains(
-            "active"
-        )
-    ) {
-
-        afficherTableauHistorique();
-
-    }
-
 }
 
 
 // =====================================================
-// COMMANDER START / STOP
+// START / STOP
 // =====================================================
 
 async function envoyerCommande(
@@ -1326,13 +1256,13 @@ async function envoyerCommande(
                 "/api/command",
                 {
 
-                    method: "POST",
+                    method:
+                        "POST",
 
                     headers: {
 
                         "Content-Type":
                             "application/json"
-
                     },
 
                     body:
@@ -1342,7 +1272,6 @@ async function envoyerCommande(
                                 commande
 
                         })
-
                 }
             );
 
@@ -1352,30 +1281,27 @@ async function envoyerCommande(
 
 
         if (
+            reponse.ok &&
             data.success
         ) {
 
             message.textContent =
                 "Commande " +
                 commande +
-                " envoyée avec succès.";
+                " envoyée. Attente de l'ESP32...";
 
-        }
-
-        else {
+        } else {
 
             message.textContent =
                 "Erreur : " +
                 (
+                    data.error ||
                     data.message ||
                     "Commande refusée"
                 );
-
         }
 
-    }
-
-    catch (erreur) {
+    } catch (erreur) {
 
         message.textContent =
             "Erreur de connexion au serveur.";
@@ -1383,7 +1309,6 @@ async function envoyerCommande(
         console.error(
             erreur
         );
-
     }
 
 }
@@ -1397,12 +1322,22 @@ initialiserGraphiques();
 
 chargerDonnees();
 
+chargerHistorique();
 
-// Actualisation toutes les 3 secondes
+
+// Toutes les 3 secondes : état actuel
 
 setInterval(
     chargerDonnees,
     3000
+);
+
+
+// Toutes les 10 secondes : historique
+
+setInterval(
+    chargerHistorique,
+    10000
 );
 
 </script>
