@@ -1,7 +1,7 @@
-
 // ============================================================
 // SERVEUR IoT - SURVEILLANCE MOTEUR
-// Render + PostgreSQL + ESP32 + Interface Web + Telegram
+// Render + PostgreSQL + ESP32 + Arduino UNO
+// Dashboard + Telegram
 // ============================================================
 
 const express = require("express");
@@ -13,14 +13,14 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // ============================================================
-// CONFIGURATION
+// CONFIGURATION EXPRESS
 // ============================================================
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Fichiers du tableau de bord
-app.use(express.static(path.join(__dirname)));
+// Servir les fichiers du projet
+app.use(express.static(__dirname));
 
 // ============================================================
 // POSTGRESQL
@@ -47,38 +47,55 @@ if (process.env.DATABASE_URL) {
 }
 
 // ============================================================
-// VARIABLES DE SECOURS
+// DERNIERE DONNEE EN MEMOIRE
 // ============================================================
-
-// Si PostgreSQL n'est pas disponible,
-// les dernières données restent quand même accessibles.
 
 let derniereDonnee = {
 
+    success: true,
+
     rpm: 0,
+
     ax: 0,
     ay: 0,
     az: 0,
+
     arms: 0,
     vrms: 0,
+
     impulsions: 0,
+    impulsionsTotal: 0,
+
     ecart: 0,
+
     heure: "00:00:00",
+
     etat: "ARRET",
+
     moteur: "OFF",
+
     alarme: "OFF",
+
     probleme: "AUCUN"
 
 };
 
-// Dernière commande envoyée par le tableau de bord
+// ============================================================
+// COMMANDES
+// ============================================================
 
-let derniereCommande = "STOP";
+let derniereCommande = "NONE";
 
 let numeroCommande = 0;
 
 // ============================================================
-// INITIALISATION BASE DE DONNEES
+// ETAT TELEGRAM
+// ============================================================
+
+let derniereAlarmeTelegram = false;
+
+// ============================================================
+// INITIALISATION POSTGRESQL
 // ============================================================
 
 async function initialiserBase() {
@@ -92,10 +109,13 @@ async function initialiserBase() {
         await pool.query(`
 
             CREATE TABLE IF NOT EXISTS mesures (
+
                 id SERIAL PRIMARY KEY,
+
                 created_at TIMESTAMPTZ DEFAULT NOW(),
 
                 rpm DOUBLE PRECISION DEFAULT 0,
+
                 ax DOUBLE PRECISION DEFAULT 0,
                 ay DOUBLE PRECISION DEFAULT 0,
                 az DOUBLE PRECISION DEFAULT 0,
@@ -104,15 +124,18 @@ async function initialiserBase() {
                 vrms DOUBLE PRECISION DEFAULT 0,
 
                 impulsions INTEGER DEFAULT 0,
+                impulsions_total INTEGER DEFAULT 0,
 
                 ecart DOUBLE PRECISION DEFAULT 0,
 
                 heure TEXT,
 
                 etat TEXT,
+
                 moteur TEXT,
 
                 alarme TEXT,
+
                 probleme TEXT
             )
 
@@ -121,10 +144,15 @@ async function initialiserBase() {
         await pool.query(`
 
             CREATE TABLE IF NOT EXISTS commandes (
+
                 id SERIAL PRIMARY KEY,
+
                 commande TEXT NOT NULL,
+
                 created_at TIMESTAMPTZ DEFAULT NOW(),
+
                 executee BOOLEAN DEFAULT FALSE
+
             )
 
         `);
@@ -152,7 +180,6 @@ const TELEGRAM_BOT_TOKEN =
 const TELEGRAM_CHAT_ID =
     process.env.TELEGRAM_CHAT_ID || "";
 
-
 async function envoyerTelegram(message) {
 
     if (
@@ -173,26 +200,27 @@ async function envoyerTelegram(message) {
             `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
         const response =
-            await fetch(url, {
+            await fetch(
+                url,
+                {
+                    method: "POST",
 
-                method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+                    body: JSON.stringify({
 
-                body: JSON.stringify({
+                        chat_id:
+                            TELEGRAM_CHAT_ID,
 
-                    chat_id:
-                        TELEGRAM_CHAT_ID,
+                        text:
+                            message
 
-                    text:
-                        message
-
-                })
-
-            });
+                    })
+                }
+            );
 
         const resultat =
             await response.json();
@@ -203,7 +231,6 @@ async function envoyerTelegram(message) {
                 "Erreur Telegram :",
                 resultat
             );
-
         }
 
     } catch (error) {
@@ -214,7 +241,6 @@ async function envoyerTelegram(message) {
         );
     }
 }
-
 
 // ============================================================
 // PAGE PRINCIPALE
@@ -230,7 +256,6 @@ app.get("/", (req, res) => {
     );
 
 });
-
 
 // ============================================================
 // TEST SERVEUR
@@ -255,14 +280,9 @@ app.get("/api/status", (req, res) => {
 
 });
 
-
 // ============================================================
 // GET /api/data
 // ============================================================
-//
-// Cette route est utilisée par index.html.
-// Elle renvoie les dernières données reçues de l'ESP32.
-//
 
 app.get("/api/data", async (req, res) => {
 
@@ -274,18 +294,29 @@ app.get("/api/data", async (req, res) => {
                 await pool.query(`
 
                     SELECT
+
                         rpm,
+
                         ax,
                         ay,
                         az,
+
                         arms,
                         vrms,
+
                         impulsions,
+                        impulsions_total,
+
                         ecart,
+
                         heure,
+
                         etat,
+
                         moteur,
+
                         alarme,
+
                         probleme
 
                     FROM mesures
@@ -304,6 +335,8 @@ app.get("/api/data", async (req, res) => {
                     result.rows[0];
 
                 derniereDonnee = {
+
+                    success: true,
 
                     rpm:
                         Number(ligne.rpm || 0),
@@ -326,6 +359,11 @@ app.get("/api/data", async (req, res) => {
                     impulsions:
                         Number(
                             ligne.impulsions || 0
+                        ),
+
+                    impulsionsTotal:
+                        Number(
+                            ligne.impulsions_total || 0
                         ),
 
                     ecart:
@@ -352,17 +390,12 @@ app.get("/api/data", async (req, res) => {
                         "AUCUN"
 
                 };
-
             }
         }
 
-        res.json({
-
-            success: true,
-
-            ...derniereDonnee
-
-        });
+        res.json(
+            derniereDonnee
+        );
 
     } catch (error) {
 
@@ -371,43 +404,17 @@ app.get("/api/data", async (req, res) => {
             error.message
         );
 
-        res.json({
-
-            success: true,
-
-            ...derniereDonnee
-
-        });
-
+        res.json(
+            derniereDonnee
+        );
     }
 
 });
 
-
 // ============================================================
 // POST /api/data
+// ESP32 -> RENDER
 // ============================================================
-//
-// ESP32 -> Render
-//
-// Format accepté :
-//
-// {
-//   rpm: 2900,
-//   ax: 4.17,
-//   ay: -7.19,
-//   az: 7.73,
-//   arms: 6.55,
-//   vrms: 8.23,
-//   impulsions: 48,
-//   ecart: 0,
-//   heure: "00:02:18",
-//   etat: "NORMAL",
-//   moteur: "ON",
-//   alarme: "OFF",
-//   probleme: "AUCUN"
-// }
-//
 
 app.post("/api/data", async (req, res) => {
 
@@ -416,30 +423,21 @@ app.post("/api/data", async (req, res) => {
         const body =
             req.body || {};
 
-
-        // ====================================================
-        // NORMALISATION
-        // ====================================================
+        // ----------------------------------------------------
+        // MESURES
+        // ----------------------------------------------------
 
         const rpm =
-            Number(
-                body.rpm ?? 0
-            );
+            Number(body.rpm ?? 0);
 
         const ax =
-            Number(
-                body.ax ?? 0
-            );
+            Number(body.ax ?? 0);
 
         const ay =
-            Number(
-                body.ay ?? 0
-            );
+            Number(body.ay ?? 0);
 
         const az =
-            Number(
-                body.az ?? 0
-            );
+            Number(body.az ?? 0);
 
         const arms =
             Number(
@@ -458,6 +456,13 @@ app.post("/api/data", async (req, res) => {
         const impulsions =
             Number(
                 body.impulsions ?? 0
+            );
+
+        const impulsionsTotal =
+            Number(
+                body.impulsionsTotal ??
+                body.impulsions_total ??
+                0
             );
 
         const ecart =
@@ -500,14 +505,49 @@ app.post("/api/data", async (req, res) => {
                 "AUCUN"
             );
 
+        // ----------------------------------------------------
+        // PROTECTION NaN / INFINITY
+        // ----------------------------------------------------
 
-        // ====================================================
-        // MISE A JOUR DERNIERE DONNEE
-        // ====================================================
+        const valeurs = [
+            rpm,
+            ax,
+            ay,
+            az,
+            arms,
+            vrms,
+            impulsions,
+            impulsionsTotal,
+            ecart
+        ];
+
+        for (
+            const valeur of valeurs
+        ) {
+
+            if (!Number.isFinite(valeur)) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+                        "Valeur numérique invalide"
+
+                });
+            }
+        }
+
+        // ----------------------------------------------------
+        // MEMOIRE
+        // ----------------------------------------------------
 
         derniereDonnee = {
 
+            success: true,
+
             rpm,
+
             ax,
             ay,
             az,
@@ -516,29 +556,30 @@ app.post("/api/data", async (req, res) => {
             vrms,
 
             impulsions,
+            impulsionsTotal,
 
             ecart,
 
             heure,
 
             etat,
+
             moteur,
 
             alarme,
+
             probleme
 
         };
-
 
         console.log(
             "DONNEES ESP32 :",
             derniereDonnee
         );
 
-
-        // ====================================================
-        // ENREGISTREMENT POSTGRESQL
-        // ====================================================
+        // ----------------------------------------------------
+        // POSTGRESQL
+        // ----------------------------------------------------
 
         if (pool) {
 
@@ -547,6 +588,7 @@ app.post("/api/data", async (req, res) => {
                 INSERT INTO mesures (
 
                     rpm,
+
                     ax,
                     ay,
                     az,
@@ -555,40 +597,53 @@ app.post("/api/data", async (req, res) => {
                     vrms,
 
                     impulsions,
+                    impulsions_total,
 
                     ecart,
 
                     heure,
 
                     etat,
+
                     moteur,
 
                     alarme,
+
                     probleme
 
                 )
 
                 VALUES (
 
-                    $1, $2, $3, $4,
+                    $1,
+                    $2,
+                    $3,
+                    $4,
 
-                    $5, $6,
+                    $5,
+                    $6,
 
                     $7,
-
                     $8,
 
                     $9,
 
-                    $10, $11,
+                    $10,
 
-                    $12, $13
+                    $11,
+
+                    $12,
+
+                    $13,
+
+                    $14
 
                 )
 
             `, [
 
                 rpm,
+
                 ax,
                 ay,
                 az,
@@ -597,29 +652,34 @@ app.post("/api/data", async (req, res) => {
                 vrms,
 
                 impulsions,
+                impulsionsTotal,
 
                 ecart,
 
                 heure,
 
                 etat,
+
                 moteur,
 
                 alarme,
+
                 probleme
 
             ]);
-
         }
 
+        // ----------------------------------------------------
+        // TELEGRAM
+        // Seulement lors du passage OFF -> ON
+        // ----------------------------------------------------
 
-        // ====================================================
-        // TELEGRAM SI ALARME
-        // ====================================================
+        const alarmeActuelle =
+            alarme.toUpperCase() === "ON";
 
         if (
-            String(alarme).toUpperCase()
-            === "ON"
+            alarmeActuelle &&
+            !derniereAlarmeTelegram
         ) {
 
             const message =
@@ -633,6 +693,10 @@ app.post("/api/data", async (req, res) => {
                 "VRMS : " +
                 vrms.toFixed(2) +
                 " mm/s\n" +
+
+                "ARMS : " +
+                arms.toFixed(2) +
+                " m/s²\n" +
 
                 "Impulsions : " +
                 impulsions +
@@ -650,10 +714,12 @@ app.post("/api/data", async (req, res) => {
             );
         }
 
+        derniereAlarmeTelegram =
+            alarmeActuelle;
 
-        // ====================================================
+        // ----------------------------------------------------
         // REPONSE
-        // ====================================================
+        // ----------------------------------------------------
 
         res.json({
 
@@ -666,7 +732,6 @@ app.post("/api/data", async (req, res) => {
                 derniereDonnee
 
         });
-
 
     } catch (error) {
 
@@ -686,18 +751,13 @@ app.post("/api/data", async (req, res) => {
                 error.message
 
         });
-
     }
 
 });
 
-
 // ============================================================
 // GET /api/history
 // ============================================================
-//
-// Historique PostgreSQL
-//
 
 app.get("/api/history", async (req, res) => {
 
@@ -705,26 +765,37 @@ app.get("/api/history", async (req, res) => {
 
         if (!pool) {
 
-            return res.status(500).json({
+            return res.json({
 
-                success: false,
+                success: true,
 
-                error:
-                    "DATABASE_URL non configurée"
+                count: 0,
+
+                data: []
 
             });
-
         }
 
-
-        const limite =
-            Math.min(
-                Number(
-                    req.query.limit || 100
-                ),
-                1000
+        let limite =
+            Number(
+                req.query.limit || 100
             );
 
+        if (
+            !Number.isFinite(limite)
+        ) {
+
+            limite = 100;
+        }
+
+        limite =
+            Math.max(
+                1,
+                Math.min(
+                    Math.floor(limite),
+                    1000
+                )
+            );
 
         const result =
             await pool.query(`
@@ -745,15 +816,18 @@ app.get("/api/history", async (req, res) => {
                     vrms,
 
                     impulsions,
+                    impulsions_total,
 
                     ecart,
 
                     heure,
 
                     etat,
+
                     moteur,
 
                     alarme,
+
                     probleme
 
                 FROM mesures
@@ -763,11 +837,8 @@ app.get("/api/history", async (req, res) => {
                 LIMIT $1
 
             `, [
-
                 limite
-
             ]);
-
 
         res.json({
 
@@ -780,7 +851,6 @@ app.get("/api/history", async (req, res) => {
                 result.rows
 
         });
-
 
     } catch (error) {
 
@@ -800,20 +870,14 @@ app.get("/api/history", async (req, res) => {
                 error.message
 
         });
-
     }
 
 });
 
-
 // ============================================================
 // POST /api/command
+// DASHBOARD -> RENDER
 // ============================================================
-//
-// Interface Web -> Render
-//
-// Reçoit START ou STOP.
-//
 
 app.post("/api/command", async (req, res) => {
 
@@ -822,7 +886,6 @@ app.post("/api/command", async (req, res) => {
         let commande =
             req.body?.command ||
             req.body?.commande;
-
 
         if (!commande) {
 
@@ -834,17 +897,12 @@ app.post("/api/command", async (req, res) => {
                     "Commande absente"
 
             });
-
         }
 
-
         commande =
-            String(
-                commande
-            )
-            .trim()
-            .toUpperCase();
-
+            String(commande)
+                .trim()
+                .toUpperCase();
 
         if (
             commande !== "START" &&
@@ -859,61 +917,60 @@ app.post("/api/command", async (req, res) => {
                     "Commande invalide"
 
             });
-
         }
 
+        // ----------------------------------------------------
+        // NUMERO COMMANDE
+        // ----------------------------------------------------
 
         numeroCommande++;
-
 
         derniereCommande =
             commande;
 
-
-        // ====================================================
+        // ----------------------------------------------------
         // POSTGRESQL
-        // ====================================================
+        // ----------------------------------------------------
 
         if (pool) {
 
             await pool.query(`
 
                 INSERT INTO commandes (
+
                     commande,
+
                     executee
+
                 )
 
-                VALUES ($1, FALSE)
+                VALUES (
+
+                    $1,
+
+                    FALSE
+
+                )
 
             `, [
-
                 commande
-
             ]);
-
         }
-
 
         console.log(
             "NOUVELLE COMMANDE :",
             commande
         );
 
-
         res.json({
 
             success: true,
 
-            commande:
+            commande,
 
-                commande,
-
-            numeroCommande:
-
-                numeroCommande
+            numeroCommande
 
         });
-
 
     } catch (error) {
 
@@ -933,20 +990,14 @@ app.post("/api/command", async (req, res) => {
                 error.message
 
         });
-
     }
 
 });
 
-
 // ============================================================
 // GET /api/command
+// ESP32 -> RENDER
 // ============================================================
-//
-// ESP32 -> Render
-//
-// L'ESP32 vient chercher START ou STOP.
-//
 
 app.get("/api/command", async (req, res) => {
 
@@ -958,8 +1009,11 @@ app.get("/api/command", async (req, res) => {
                 await pool.query(`
 
                     SELECT
+
                         id,
+
                         commande,
+
                         created_at
 
                     FROM commandes
@@ -972,16 +1026,12 @@ app.get("/api/command", async (req, res) => {
 
                 `);
 
-
             if (
                 result.rows.length > 0
             ) {
 
                 const commande =
                     result.rows[0];
-
-
-                // Marquer comme exécutée
 
                 await pool.query(`
 
@@ -992,15 +1042,11 @@ app.get("/api/command", async (req, res) => {
                     WHERE id = $1
 
                 `, [
-
                     commande.id
-
                 ]);
-
 
                 derniereCommande =
                     commande.commande;
-
 
                 res.json({
 
@@ -1015,12 +1061,12 @@ app.get("/api/command", async (req, res) => {
                 });
 
                 return;
-
             }
         }
 
-
-        // Aucune nouvelle commande
+        // ----------------------------------------------------
+        // AUCUNE COMMANDE
+        // ----------------------------------------------------
 
         res.json({
 
@@ -1033,7 +1079,6 @@ app.get("/api/command", async (req, res) => {
                 0
 
         });
-
 
     } catch (error) {
 
@@ -1053,11 +1098,9 @@ app.get("/api/command", async (req, res) => {
                 error.message
 
         });
-
     }
 
 });
-
 
 // ============================================================
 // ROUTE 404
@@ -1077,10 +1120,8 @@ app.use(
                 req.originalUrl
 
         });
-
     }
 );
-
 
 // ============================================================
 // DEMARRAGE
@@ -1091,8 +1132,11 @@ async function demarrer() {
     await initialiserBase();
 
     app.listen(
+
         PORT,
+
         "0.0.0.0",
+
         () => {
 
             console.log();
@@ -1114,7 +1158,11 @@ async function demarrer() {
             );
 
             console.log(
-                "API DATA : POST/GET /api/data"
+                "PAGE : /"
+            );
+
+            console.log(
+                "API DATA : GET/POST /api/data"
             );
 
             console.log(
@@ -1122,7 +1170,7 @@ async function demarrer() {
             );
 
             console.log(
-                "COMMAND : POST/GET /api/command"
+                "COMMAND : GET/POST /api/command"
             );
 
             console.log(
@@ -1142,10 +1190,8 @@ async function demarrer() {
             console.log(
                 "======================================"
             );
-
         }
     );
-
 }
 
 demarrer();
