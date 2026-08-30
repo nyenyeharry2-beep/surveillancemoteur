@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 
@@ -140,6 +141,13 @@ header h1 {
     font-weight: bold;
 }
 
+.totalValue {
+
+    font-size: 32px;
+
+    font-weight: bold;
+}
+
 .alarm {
 
     text-align: center;
@@ -252,7 +260,7 @@ table {
 
     margin-top: 15px;
 
-    min-width: 1200px;
+    min-width: 1250px;
 }
 
 th,
@@ -305,6 +313,11 @@ canvas {
         font-size: 23px;
     }
 
+    .totalValue {
+
+        font-size: 27px;
+    }
+
     button {
 
         width: 100%;
@@ -315,9 +328,11 @@ canvas {
 
 </head>
 
+
 <body>
 
 <div class="container">
+
 
 <header>
 
@@ -332,7 +347,10 @@ Connexion : EN ATTENTE
 </header>
 
 
-<!-- ETAT -->
+
+<!-- =====================================================
+     ETAT DU MOTEUR
+===================================================== -->
 
 <div class="card status">
 
@@ -357,7 +375,10 @@ OFF
 </div>
 
 
-<!-- ALARME -->
+
+<!-- =====================================================
+     ALARME
+===================================================== -->
 
 <div class="card alarm">
 
@@ -376,7 +397,10 @@ AUCUN
 </div>
 
 
-<!-- DONNEES -->
+
+<!-- =====================================================
+     DONNEES MOTEUR
+===================================================== -->
 
 <div class="card">
 
@@ -387,9 +411,12 @@ AUCUN
 <div class="grid">
 
 
+
 <div class="card">
 
-<h3>RPM</h3>
+<h3>
+RPM
+</h3>
 
 <div
     id="rpm"
@@ -401,9 +428,12 @@ AUCUN
 </div>
 
 
+
 <div class="card">
 
-<h3>AX</h3>
+<h3>
+AX
+</h3>
 
 <div
     id="ax"
@@ -415,9 +445,12 @@ AUCUN
 </div>
 
 
+
 <div class="card">
 
-<h3>AY</h3>
+<h3>
+AY
+</h3>
 
 <div
     id="ay"
@@ -429,9 +462,12 @@ AUCUN
 </div>
 
 
+
 <div class="card">
 
-<h3>AZ</h3>
+<h3>
+AZ
+</h3>
 
 <div
     id="az"
@@ -443,9 +479,12 @@ AUCUN
 </div>
 
 
+
 <div class="card">
 
-<h3>Accélération RMS</h3>
+<h3>
+Accélération RMS
+</h3>
 
 <div
     id="arms"
@@ -457,9 +496,12 @@ AUCUN
 </div>
 
 
+
 <div class="card">
 
-<h3>Vibration RMS</h3>
+<h3>
+Vibration RMS
+</h3>
 
 <div
     id="vrms"
@@ -471,9 +513,12 @@ AUCUN
 </div>
 
 
+
 <div class="card">
 
-<h3>Impulsions</h3>
+<h3>
+Impulsions
+</h3>
 
 <div
     id="impulsions"
@@ -485,9 +530,31 @@ AUCUN
 </div>
 
 
+
+<!-- NOUVEAU : IMPULSIONS TOTALES -->
+
 <div class="card">
 
-<h3>Écart RPM</h3>
+<h3>
+🔢 Impulsions totales
+</h3>
+
+<div
+    id="impulsionsTotal"
+    class="totalValue"
+>
+0
+</div>
+
+</div>
+
+
+
+<div class="card">
+
+<h3>
+Écart RPM
+</h3>
 
 <div
     id="ecart"
@@ -499,9 +566,12 @@ AUCUN
 </div>
 
 
+
 <div class="card">
 
-<h3>Heure</h3>
+<h3>
+Heure
+</h3>
 
 <div
     id="heure"
@@ -513,12 +583,16 @@ AUCUN
 </div>
 
 
-</div>
 
 </div>
 
+</div>
 
-<!-- COMMANDES -->
+
+
+<!-- =====================================================
+     COMMANDES
+===================================================== -->
 
 <div class="card">
 
@@ -553,7 +627,10 @@ COMMANDE DU MOTEUR
 </div>
 
 
-<!-- HISTORIQUE -->
+
+<!-- =====================================================
+     HISTORIQUE
+===================================================== -->
 
 <div class="card">
 
@@ -565,6 +642,7 @@ COMMANDE DU MOTEUR
 </button>
 
 </div>
+
 
 
 <div
@@ -600,6 +678,8 @@ COMMANDE DU MOTEUR
 
 <th>Impulsions</th>
 
+<th>Impulsions totales</th>
+
 <th>Écart RPM</th>
 
 <th>État</th>
@@ -625,7 +705,10 @@ COMMANDE DU MOTEUR
 </div>
 
 
-<!-- COURBE RPM -->
+
+<!-- =====================================================
+     COURBE RPM
+===================================================== -->
 
 <div class="card">
 
@@ -638,7 +721,10 @@ COMMANDE DU MOTEUR
 </div>
 
 
-<!-- COURBE VRMS -->
+
+<!-- =====================================================
+     COURBE VRMS
+===================================================== -->
 
 <div class="card">
 
@@ -651,22 +737,27 @@ COMMANDE DU MOTEUR
 </div>
 
 
+
 <div class="footer">
 
 Système IoT de surveillance moteur
 
 </div>
 
+
 </div>
 
 
+
 <script>
+
 
 // =====================================================
 // VARIABLES
 // =====================================================
 
 let rpmChart;
+
 let vrmsChart;
 
 let historique = [];
@@ -688,6 +779,42 @@ function nombre(valeur) {
 
 
 // =====================================================
+// IMPULSIONS TOTALES
+// =====================================================
+//
+// Priorité :
+// 1. data.impulsionsTotal
+// 2. data.impulsions
+//
+// Le serveur peut donc envoyer :
+//
+// {
+//     "impulsions": 48,
+//     "impulsionsTotal": 12560
+// }
+//
+// =====================================================
+
+function obtenirImpulsionsTotales(data) {
+
+    if (
+        data.impulsionsTotal !== undefined &&
+        data.impulsionsTotal !== null
+    ) {
+
+        return nombre(
+            data.impulsionsTotal
+        );
+
+    }
+
+    return nombre(
+        data.impulsions
+    );
+}
+
+
+// =====================================================
 // AFFICHAGE DONNEES
 // =====================================================
 
@@ -699,6 +826,8 @@ function afficherDonnees(data) {
             "Connexion : CONNECTÉ";
 
 
+    // RPM
+
     document
         .getElementById("rpm")
         .textContent =
@@ -706,6 +835,8 @@ function afficherDonnees(data) {
                 .toFixed(2)
             + " tr/min";
 
+
+    // AX
 
     document
         .getElementById("ax")
@@ -715,6 +846,8 @@ function afficherDonnees(data) {
             + " m/s²";
 
 
+    // AY
+
     document
         .getElementById("ay")
         .textContent =
@@ -723,6 +856,8 @@ function afficherDonnees(data) {
             + " m/s²";
 
 
+    // AZ
+
     document
         .getElementById("az")
         .textContent =
@@ -730,6 +865,8 @@ function afficherDonnees(data) {
                 .toFixed(2)
             + " m/s²";
 
+
+    // ACCELERATION RMS
 
     document
         .getElementById("arms")
@@ -742,6 +879,8 @@ function afficherDonnees(data) {
             + " m/s²";
 
 
+    // VIBRATION RMS
+
     document
         .getElementById("vrms")
         .textContent =
@@ -753,6 +892,8 @@ function afficherDonnees(data) {
             + " mm/s";
 
 
+    // IMPULSIONS
+
     document
         .getElementById("impulsions")
         .textContent =
@@ -760,6 +901,17 @@ function afficherDonnees(data) {
                 data.impulsions
             );
 
+
+    // IMPULSIONS TOTALES
+
+    document
+        .getElementById("impulsionsTotal")
+        .textContent =
+            obtenirImpulsionsTotales(data)
+                .toLocaleString("fr-FR");
+
+
+    // ECART RPM
 
     document
         .getElementById("ecart")
@@ -769,12 +921,16 @@ function afficherDonnees(data) {
             + " %";
 
 
+    // HEURE
+
     document
         .getElementById("heure")
         .textContent =
             data.heure ||
             "00:00:00";
 
+
+    // ETAT
 
     document
         .getElementById("etat")
@@ -783,12 +939,16 @@ function afficherDonnees(data) {
             "ARRET";
 
 
+    // MOTEUR
+
     document
         .getElementById("moteur")
         .textContent =
             data.moteur ||
             "OFF";
 
+
+    // ALARME
 
     document
         .getElementById("alarme")
@@ -797,12 +957,16 @@ function afficherDonnees(data) {
             "OFF";
 
 
+    // PROBLEME
+
     document
         .getElementById("probleme")
         .textContent =
             data.probleme ||
             "AUCUN";
 
+
+    // STYLE ALARME
 
     const blocAlarme =
         document.querySelector(
@@ -829,7 +993,7 @@ function afficherDonnees(data) {
 
 
 // =====================================================
-// CHARGER DONNEES
+// CHARGER DONNEES ACTUELLES
 // =====================================================
 
 async function chargerDonnees() {
@@ -845,6 +1009,7 @@ async function chargerDonnees() {
                 }
             );
 
+
         if (!reponse.ok) {
 
             throw new Error(
@@ -853,10 +1018,13 @@ async function chargerDonnees() {
             );
         }
 
+
         const data =
             await reponse.json();
 
+
         afficherDonnees(data);
+
 
     } catch (erreur) {
 
@@ -865,10 +1033,13 @@ async function chargerDonnees() {
             .textContent =
                 "Connexion : HORS LIGNE";
 
+
         console.error(
             erreur
         );
+
     }
+
 }
 
 
@@ -889,6 +1060,7 @@ async function chargerHistorique() {
                 }
             );
 
+
         if (!reponse.ok) {
 
             throw new Error(
@@ -897,8 +1069,10 @@ async function chargerHistorique() {
             );
         }
 
+
         const resultat =
             await reponse.json();
+
 
         if (
             resultat.success
@@ -909,10 +1083,13 @@ async function chargerHistorique() {
                     .slice()
                     .reverse();
 
+
             afficherTableauHistorique();
 
             mettreAJourGraphiques();
+
         }
+
 
     } catch (erreur) {
 
@@ -920,12 +1097,14 @@ async function chargerHistorique() {
             "Historique :",
             erreur
         );
+
     }
+
 }
 
 
 // =====================================================
-// HISTORIQUE
+// AFFICHER / CACHER HISTORIQUE
 // =====================================================
 
 function afficherHistorique() {
@@ -935,9 +1114,11 @@ function afficherHistorique() {
             "historiqueSection"
         );
 
+
     section.classList.toggle(
         "active"
     );
+
 
     if (
         section.classList.contains(
@@ -946,12 +1127,14 @@ function afficherHistorique() {
     ) {
 
         chargerHistorique();
+
     }
+
 }
 
 
 // =====================================================
-// TABLEAU
+// TABLEAU HISTORIQUE
 // =====================================================
 
 function afficherTableauHistorique() {
@@ -960,6 +1143,7 @@ function afficherTableauHistorique() {
         document.getElementById(
             "historiqueBody"
         );
+
 
     tbody.innerHTML = "";
 
@@ -973,9 +1157,16 @@ function afficherTableauHistorique() {
     donnees.forEach(
         function(data) {
 
+
             const ligne =
                 document.createElement(
                     "tr"
+                );
+
+
+            const total =
+                obtenirImpulsionsTotales(
+                    data
                 );
 
 
@@ -1002,15 +1193,27 @@ function afficherTableauHistorique() {
                 </td>
 
                 <td>
-                    ${nombre(data.arms).toFixed(2)}
+                    ${nombre(
+                        data.arms ??
+                        data.accelerationRMS
+                    ).toFixed(2)}
                 </td>
 
                 <td>
-                    ${nombre(data.vrms).toFixed(2)}
+                    ${nombre(
+                        data.vrms ??
+                        data.vibration
+                    ).toFixed(2)}
                 </td>
 
                 <td>
-                    ${nombre(data.impulsions)}
+                    ${nombre(
+                        data.impulsions
+                    )}
+                </td>
+
+                <td>
+                    ${total.toLocaleString("fr-FR")}
                 </td>
 
                 <td>
@@ -1052,6 +1255,7 @@ function afficherTableauHistorique() {
 
 function initialiserGraphiques() {
 
+
     const contexteRPM =
         document
             .getElementById(
@@ -1067,6 +1271,8 @@ function initialiserGraphiques() {
             )
             .getContext("2d");
 
+
+    // GRAPH RPM
 
     rpmChart =
         new Chart(
@@ -1091,9 +1297,11 @@ function initialiserGraphiques() {
 
                             tension:
                                 0.3
+
                         }
 
                     ]
+
                 },
 
                 options: {
@@ -1112,11 +1320,16 @@ function initialiserGraphiques() {
                                 true
 
                         }
+
                     }
+
                 }
+
             }
         );
 
+
+    // GRAPH VRMS
 
     vrmsChart =
         new Chart(
@@ -1141,9 +1354,11 @@ function initialiserGraphiques() {
 
                             tension:
                                 0.3
+
                         }
 
                     ]
+
                 },
 
                 options: {
@@ -1162,10 +1377,15 @@ function initialiserGraphiques() {
                                 true
 
                         }
+
                     }
+
                 }
+
             }
+
         );
+
 }
 
 
@@ -1175,12 +1395,14 @@ function initialiserGraphiques() {
 
 function mettreAJourGraphiques() {
 
+
     if (
         !rpmChart ||
         !vrmsChart
     ) {
 
         return;
+
     }
 
 
@@ -1206,15 +1428,20 @@ function mettreAJourGraphiques() {
     const vrms =
         donnees.map(
             d =>
-                nombre(d.vrms)
+                nombre(
+                    d.vrms ??
+                    d.vibration
+                )
         );
 
 
     rpmChart.data.labels =
         labels;
 
+
     rpmChart.data.datasets[0].data =
         rpm;
+
 
     rpmChart.update();
 
@@ -1222,10 +1449,13 @@ function mettreAJourGraphiques() {
     vrmsChart.data.labels =
         labels;
 
+
     vrmsChart.data.datasets[0].data =
         vrms;
 
+
     vrmsChart.update();
+
 }
 
 
@@ -1236,6 +1466,7 @@ function mettreAJourGraphiques() {
 async function envoyerCommande(
     commande
 ) {
+
 
     const message =
         document.getElementById(
@@ -1251,6 +1482,7 @@ async function envoyerCommande(
 
     try {
 
+
         const reponse =
             await fetch(
                 "/api/command",
@@ -1263,6 +1495,7 @@ async function envoyerCommande(
 
                         "Content-Type":
                             "application/json"
+
                     },
 
                     body:
@@ -1272,6 +1505,7 @@ async function envoyerCommande(
                                 commande
 
                         })
+
                 }
             );
 
@@ -1285,12 +1519,15 @@ async function envoyerCommande(
             data.success
         ) {
 
+
             message.textContent =
                 "Commande " +
                 commande +
                 " envoyée. Attente de l'ESP32...";
 
+
         } else {
+
 
             message.textContent =
                 "Erreur : " +
@@ -1299,16 +1536,21 @@ async function envoyerCommande(
                     data.message ||
                     "Commande refusée"
                 );
+
         }
 
+
     } catch (erreur) {
+
 
         message.textContent =
             "Erreur de connexion au serveur.";
 
+
         console.error(
             erreur
         );
+
     }
 
 }
@@ -1325,7 +1567,11 @@ chargerDonnees();
 chargerHistorique();
 
 
-// Toutes les 3 secondes : état actuel
+// =====================================================
+// ACTUALISATION
+// =====================================================
+
+// Données actuelles toutes les 3 secondes
 
 setInterval(
     chargerDonnees,
@@ -1333,12 +1579,13 @@ setInterval(
 );
 
 
-// Toutes les 10 secondes : historique
+// Historique toutes les 10 secondes
 
 setInterval(
     chargerHistorique,
     10000
 );
+
 
 </script>
 
