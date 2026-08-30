@@ -1,10 +1,13 @@
 {
   "name": "surveillance-moteur",
   "version": "1.0.0",
-  "description": "Serveur IoT de surveillance de moteur",
+  "description": "Serveur IoT de surveillance d'un moteur avec ESP32, Arduino UNO, PostgreSQL et tableau de bord",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "express": "^5.1.0",
